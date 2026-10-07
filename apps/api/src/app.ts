@@ -58,7 +58,9 @@ export function buildApp(
       request,
       reply,
       deps.notifier,
-      new AppError('VALIDATION_FAILED', {detail: `存在しない経路: ${request.method} ${request.url}`})
+      new AppError('VALIDATION_FAILED', {
+        detail: `存在しない経路: ${request.method} ${request.url}`,
+      })
     );
   });
 

@@ -16,7 +16,8 @@ let loading: Promise<void> | null = null;
 export function loadQrEngine(): Promise<void> {
   loading ??= prepareZXingModule({
     overrides: {
-      locateFile: (path: string, prefix: string) => (path.endsWith('.wasm') ? wasmUrl : prefix + path),
+      locateFile: (path: string, prefix: string) =>
+        path.endsWith('.wasm') ? wasmUrl : prefix + path,
     },
     fireImmediately: true,
   }).then(

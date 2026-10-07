@@ -26,7 +26,8 @@ async function codeOf(p: Promise<unknown>): Promise<string> {
   throw new Error('例外が出なかった');
 }
 
-const fetchReturning = (res: Response) => vi.fn(() => Promise.resolve(res)) as unknown as typeof fetch;
+const fetchReturning = (res: Response) =>
+  vi.fn(() => Promise.resolve(res)) as unknown as typeof fetch;
 
 describe('request(): 成功', () => {
   it('2xx の JSON を返す', async () => {
@@ -43,7 +44,13 @@ describe('request(): 成功', () => {
 describe('request(): 失敗は必ずエラーコードになる', () => {
   it('API のエラー応答はそのコードと ID を引き継ぐ', async () => {
     const body = {
-      error: {code: 'DB_UNAVAILABLE', category: 'SYSTEM', message: 'x', requestId: 'req-1', inspectionId: null},
+      error: {
+        code: 'DB_UNAVAILABLE',
+        category: 'SYSTEM',
+        message: 'x',
+        requestId: 'req-1',
+        inspectionId: null,
+      },
     };
     try {
       await request('/x', {fetchImpl: fetchReturning(json(body, 503))});
@@ -77,7 +84,10 @@ describe('request(): 失敗は必ずエラーコードになる', () => {
   });
 
   it('2xx でも JSON でなければ RESPONSE_INVALID（成功扱いにしない）', async () => {
-    const res = new Response('<html>captive portal</html>', {status: 200, headers: {'content-type': 'text/html'}});
+    const res = new Response('<html>captive portal</html>', {
+      status: 200,
+      headers: {'content-type': 'text/html'},
+    });
     expect(await codeOf(request('/x', {fetchImpl: fetchReturning(res)}))).toBe('RESPONSE_INVALID');
   });
 
@@ -87,7 +97,9 @@ describe('request(): 失敗は必ずエラーコードになる', () => {
   });
 
   it('通信できなければ NETWORK_OFFLINE', async () => {
-    const fetchImpl = vi.fn(() => Promise.reject(new TypeError('Failed to fetch'))) as unknown as typeof fetch;
+    const fetchImpl = vi.fn(() =>
+      Promise.reject(new TypeError('Failed to fetch'))
+    ) as unknown as typeof fetch;
     expect(await codeOf(request('/x', {fetchImpl}))).toBe('NETWORK_OFFLINE');
   });
 
@@ -95,7 +107,9 @@ describe('request(): 失敗は必ずエラーコードになる', () => {
     const fetchImpl = vi.fn(
       (_: string, init: RequestInit) =>
         new Promise((_resolve, reject) => {
-          init.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+          init.signal?.addEventListener('abort', () =>
+            reject(new DOMException('aborted', 'AbortError'))
+          );
         })
     ) as unknown as typeof fetch;
     expect(await codeOf(request('/x', {fetchImpl, timeoutMs: 10}))).toBe('REQUEST_TIMEOUT');
@@ -106,7 +120,9 @@ describe('request(): 失敗は必ずエラーコードになる', () => {
     const fetchImpl = vi.fn(
       (_: string, init: RequestInit) =>
         new Promise((_resolve, reject) => {
-          init.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')));
+          init.signal?.addEventListener('abort', () =>
+            reject(new DOMException('aborted', 'AbortError'))
+          );
         })
     ) as unknown as typeof fetch;
     const p = request('/x', {fetchImpl, signal: controller.signal, inspectionId: 'insp-1'});
@@ -131,9 +147,19 @@ describe('request(): acceptStatuses', () => {
   });
 
   it('指定したステータスでもエラー形式なら例外にする（OpenResty の 503 など）', async () => {
-    const body = {error: {code: 'UPSTREAM_UNAVAILABLE', category: 'SYSTEM', message: 'x', requestId: null, inspectionId: null}};
+    const body = {
+      error: {
+        code: 'UPSTREAM_UNAVAILABLE',
+        category: 'SYSTEM',
+        message: 'x',
+        requestId: null,
+        inspectionId: null,
+      },
+    };
     expect(
-      await codeOf(request('/x', {fetchImpl: fetchReturning(json(body, 503)), acceptStatuses: [503]}))
+      await codeOf(
+        request('/x', {fetchImpl: fetchReturning(json(body, 503)), acceptStatuses: [503]})
+      )
     ).toBe('UPSTREAM_UNAVAILABLE');
   });
 

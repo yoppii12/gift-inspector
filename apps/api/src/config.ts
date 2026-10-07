@@ -19,7 +19,11 @@ const envSchema = z
     DB_NAME: z.string().min(1),
 
     IMAGE_DIR: z.string().min(1),
-    IMAGE_MAX_BYTES: z.coerce.number().int().positive().default(5 * 1024 * 1024),
+    IMAGE_MAX_BYTES: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(5 * 1024 * 1024),
 
     AI_PROVIDER: z.enum(['mock', 'anthropic', 'openai', 'google']).default('mock'),
     AI_MODEL: z.string().default(''),
@@ -34,13 +38,18 @@ const envSchema = z
     SLACK_WEBHOOK_URL: z.union([z.literal(''), z.url()]).default(''),
   })
   .superRefine((env, ctx) => {
-    // 本番で mock や開発モードのまま起動しない（気づかないまま偽の判定を出さないため）
+    // 本番で mock のまま起動しない（気づかないまま偽の判定を出さないため）
     if (env.NODE_ENV === 'production' && env.AI_PROVIDER === 'mock') {
-      ctx.addIssue({code: 'custom', path: ['AI_PROVIDER'], message: 'production では mock を使えません'});
+      ctx.addIssue({
+        code: 'custom',
+        path: ['AI_PROVIDER'],
+        message: 'production では mock を使えません',
+      });
     }
     if (env.AI_PROVIDER !== 'mock') {
       if (!env.AI_MODEL) ctx.addIssue({code: 'custom', path: ['AI_MODEL'], message: '必須です'});
-      if (!env.AI_API_KEY) ctx.addIssue({code: 'custom', path: ['AI_API_KEY'], message: '必須です'});
+      if (!env.AI_API_KEY)
+        ctx.addIssue({code: 'custom', path: ['AI_API_KEY'], message: '必須です'});
     }
   });
 

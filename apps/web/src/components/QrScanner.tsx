@@ -29,7 +29,14 @@ export function QrScanner({onScan, onError}: Props) {
   const [constraints, setConstraints] = useState(REAR_CAMERA);
 
   return (
-    <Box sx={{aspectRatio: '1', borderRadius: `${tokens.radius.card}px`, overflow: 'hidden', bgcolor: tokens.color.main}}>
+    <Box
+      sx={{
+        aspectRatio: '1',
+        borderRadius: `${tokens.radius.card}px`,
+        overflow: 'hidden',
+        bgcolor: tokens.color.main,
+      }}
+    >
       <Scanner
         key={constraints === REAR_CAMERA ? 'rear' : 'any'}
         formats={['qr_code']}

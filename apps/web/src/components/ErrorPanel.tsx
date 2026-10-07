@@ -67,7 +67,17 @@ export function ErrorPanel({error, title, notAJudgement, onAction, occurredAt}: 
           <Typography variant="body1" sx={{mt: 1}}>
             {def.userMessage}
           </Typography>
-          <Box component="dl" sx={{mt: 1.5, mb: 0, display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: 1, rowGap: 0.25}}>
+          <Box
+            component="dl"
+            sx={{
+              mt: 1.5,
+              mb: 0,
+              display: 'grid',
+              gridTemplateColumns: 'auto 1fr',
+              columnGap: 1,
+              rowGap: 0.25,
+            }}
+          >
             <DetailRow label="エラーコード" value={error.code} />
             {error.inspectionId && <DetailRow label="検品ID" value={error.inspectionId} />}
             {error.requestId && <DetailRow label="受付ID" value={error.requestId} />}
@@ -81,7 +91,13 @@ export function ErrorPanel({error, title, notAJudgement, onAction, occurredAt}: 
               <Typography
                 variant="caption"
                 component="pre"
-                sx={{m: 0, mt: 0.5, whiteSpace: 'pre-wrap', wordBreak: 'break-all', fontFamily: 'monospace'}}
+                sx={{
+                  m: 0,
+                  mt: 0.5,
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-all',
+                  fontFamily: 'monospace',
+                }}
               >
                 {error.detail}
               </Typography>
@@ -104,7 +120,11 @@ function DetailRow({label, value}: {label: string; value: string}) {
       <Typography component="dt" variant="caption">
         {label}
       </Typography>
-      <Typography component="dd" variant="caption" sx={{m: 0, wordBreak: 'break-all', fontFamily: 'monospace'}}>
+      <Typography
+        component="dd"
+        variant="caption"
+        sx={{m: 0, wordBreak: 'break-all', fontFamily: 'monospace'}}
+      >
         {value}
       </Typography>
     </>

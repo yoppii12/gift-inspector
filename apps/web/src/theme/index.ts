@@ -35,7 +35,11 @@ export const theme = createTheme({
     warning: {main: tokens.color.accent},
     success: {main: tokens.color.main},
     info: {main: tokens.color.main},
-    text: {primary: tokens.color.main, secondary: tokens.color.main60, disabled: tokens.color.main40},
+    text: {
+      primary: tokens.color.main,
+      secondary: tokens.color.main60,
+      disabled: tokens.color.main40,
+    },
     divider: tokens.color.main15,
     background: {default: tokens.color.base, paper: tokens.color.base},
   },

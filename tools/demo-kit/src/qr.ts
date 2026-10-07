@@ -37,7 +37,11 @@ export async function renderQrSheetPdf(
   outPath: string,
   printedOn: string
 ): Promise<void> {
-  const doc = new PDFDocument({size: 'A4', margin: 40, info: {Title: 'デモ用オーダー QRコード一覧'}});
+  const doc = new PDFDocument({
+    size: 'A4',
+    margin: 40,
+    info: {Title: 'デモ用オーダー QRコード一覧'},
+  });
   const done = new Promise<void>((resolve, reject) => {
     const stream = createWriteStream(outPath);
     stream.on('finish', resolve);
@@ -59,7 +63,11 @@ export async function renderQrSheetPdf(
   const qrSize = 140;
 
   const drawHeader = () => {
-    doc.font('jp').fontSize(16).fillColor(COLOR.main).text('デモ用オーダー QRコード一覧', margin, margin);
+    doc
+      .font('jp')
+      .fontSize(16)
+      .fillColor(COLOR.main)
+      .text('デモ用オーダー QRコード一覧', margin, margin);
     doc
       .font('jp-regular')
       .fontSize(9)
@@ -77,7 +85,11 @@ export async function renderQrSheetPdf(
     const x = margin + (slot % cols) * cellW;
     const y = margin + headerH + Math.floor(slot / cols) * cellH;
 
-    doc.lineWidth(0.6).strokeColor(COLOR.main15).rect(x + 4, y + 4, cellW - 8, cellH - 8).stroke();
+    doc
+      .lineWidth(0.6)
+      .strokeColor(COLOR.main15)
+      .rect(x + 4, y + 4, cellW - 8, cellH - 8)
+      .stroke();
     doc.image(await renderQrPng(order.orderCode), x + 16, y + 14, {width: qrSize});
 
     const r = order.registered;

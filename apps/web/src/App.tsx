@@ -23,7 +23,13 @@ export function App() {
       </Box>
       <Box
         component="main"
-        sx={{maxWidth: tokens.maxWidth, mx: 'auto', px: `${tokens.space.page}px`, py: 2, pb: 'calc(16px + env(safe-area-inset-bottom))'}}
+        sx={{
+          maxWidth: tokens.maxWidth,
+          mx: 'auto',
+          px: `${tokens.space.page}px`,
+          py: 2,
+          pb: 'calc(16px + env(safe-area-inset-bottom))',
+        }}
       >
         {/* T4 でオーダー選択・撮影判定の2画面に置き換える。接続確認は ?check=1 で残す */}
         <ConnectionCheck />

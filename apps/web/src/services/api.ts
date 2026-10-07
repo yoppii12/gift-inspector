@@ -35,7 +35,8 @@ export class ClientError extends Error {
     this.requestId = options.requestId ?? null;
     this.inspectionId = options.inspectionId ?? null;
     this.detail =
-      options.detail ?? (options.cause instanceof Error ? `${options.cause.name}: ${options.cause.message}` : null);
+      options.detail ??
+      (options.cause instanceof Error ? `${options.cause.name}: ${options.cause.message}` : null);
   }
 }
 
@@ -137,7 +138,11 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
         inspectionId: body.error.inspectionId ?? inspectionId,
       });
     }
-    throw new ClientError(codeFromStatus(res.status), {httpStatus: res.status, requestId, inspectionId});
+    throw new ClientError(codeFromStatus(res.status), {
+      httpStatus: res.status,
+      requestId,
+      inspectionId,
+    });
   }
 
   if (res.status === 204) return undefined as T;

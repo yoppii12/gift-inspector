@@ -126,5 +126,8 @@ export function sendError(
     where: `${request.method} ${request.routeOptions.url ?? request.url}`,
   });
   const status = ERROR_CATALOG[err.code].httpStatus ?? 500;
-  return reply.code(status).type('application/json').send(buildErrorBody(err, request.id, inspectionId));
+  return reply
+    .code(status)
+    .type('application/json')
+    .send(buildErrorBody(err, request.id, inspectionId));
 }

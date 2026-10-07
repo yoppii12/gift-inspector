@@ -64,4 +64,3 @@ export const healthRoutes: FastifyPluginAsync<AppDeps> = async (app, {db, config
     });
   });
 };
-

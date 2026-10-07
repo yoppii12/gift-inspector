@@ -8,7 +8,8 @@
     "build": "node build.mjs",
     "start": "node dist/server.js",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "gen:nginx": "tsx scripts/gen-nginx-error-pages.ts"
   },
   "dependencies": {
     "@fastify/multipart": "^10.1.2",

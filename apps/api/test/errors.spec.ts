@@ -108,9 +108,12 @@ describe('toAppError', () => {
     expect(toAppError(e)).toBe(e);
   });
 
-  it.each([null, undefined, 'string', 42, {foo: 1}])('Error 以外（%s）も SYS_UNEXPECTED にする', v => {
-    expect(toAppError(v).code).toBe('SYS_UNEXPECTED');
-  });
+  it.each([null, undefined, 'string', 42, {foo: 1}])(
+    'Error 以外（%s）も SYS_UNEXPECTED にする',
+    v => {
+      expect(toAppError(v).code).toBe('SYS_UNEXPECTED');
+    }
+  );
 });
 
 describe('ヘルスチェック', () => {
@@ -128,7 +131,9 @@ describe('ヘルスチェック', () => {
 
   it('すべて正常なら 200', async () => {
     const conn = {query: vi.fn(() => Promise.resolve([[{1: 1}], []])), release: vi.fn()};
-    const {app} = setup({getConnection: vi.fn(() => Promise.resolve(conn))} as unknown as Partial<Db>);
+    const {app} = setup({
+      getConnection: vi.fn(() => Promise.resolve(conn)),
+    } as unknown as Partial<Db>);
     const res = await app.inject({method: 'GET', url: '/api/health'});
     expect(res.statusCode).toBe(200);
     expect(conn.release).toHaveBeenCalled();
@@ -149,7 +154,13 @@ describe('クライアントエラー報告', () => {
 describe('設定の検証', () => {
   it('production で mock は起動できない', () => {
     expect(() =>
-      loadConfig({NODE_ENV: 'production', DB_USER: 'u', DB_NAME: 'n', IMAGE_DIR: '/tmp', AI_PROVIDER: 'mock'})
+      loadConfig({
+        NODE_ENV: 'production',
+        DB_USER: 'u',
+        DB_NAME: 'n',
+        IMAGE_DIR: '/tmp',
+        AI_PROVIDER: 'mock',
+      })
     ).toThrow(/AI_PROVIDER/);
   });
 
@@ -161,7 +172,12 @@ describe('設定の検証', () => {
 
   it('エラーメッセージに値そのものを含めない', () => {
     try {
-      loadConfig({DB_USER: 'u', DB_NAME: 'n', IMAGE_DIR: '/tmp', SLACK_WEBHOOK_URL: 'secret-not-a-url'});
+      loadConfig({
+        DB_USER: 'u',
+        DB_NAME: 'n',
+        IMAGE_DIR: '/tmp',
+        SLACK_WEBHOOK_URL: 'secret-not-a-url',
+      });
       expect.unreachable();
     } catch (err: unknown) {
       expect(String(err)).not.toContain('secret-not-a-url');

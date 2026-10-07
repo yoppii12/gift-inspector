@@ -1,0 +1,14 @@
+# /etc/fail2ban/jail.d/gift-inspector.local
+[DEFAULT]
+bantime  = 1h
+findtime = 10m
+maxretry = 5
+
+[sshd]
+enabled = true
+
+# BASIC 認証の総当たり対策（OpenResty の error.log を見る）
+[nginx-http-auth]
+enabled  = true
+port     = http,https
+logpath  = /var/log/openresty/error.log

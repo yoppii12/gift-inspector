@@ -46,7 +46,10 @@ export async function prepareImage(file: File): Promise<PreparedImage> {
   try {
     bitmap = await createImageBitmap(file, {imageOrientation: 'from-image'});
   } catch (err: unknown) {
-    throw new ClientError('IMAGE_DECODE_FAILED', {detail: `${file.type || '不明な形式'}`, cause: err});
+    throw new ClientError('IMAGE_DECODE_FAILED', {
+      detail: `${file.type || '不明な形式'}`,
+      cause: err,
+    });
   }
   try {
     const scale = Math.min(1, IMAGE_MAX_EDGE / Math.max(bitmap.width, bitmap.height));

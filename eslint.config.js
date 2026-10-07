@@ -9,7 +9,13 @@ const SWALLOW_MESSAGE =
 
 export default tseslint.config(
   {
-    ignores: ['**/node_modules/**', '**/dist/**', '**/build/**', 'tools/demo-kit/out/**', 'coverage/**'],
+    ignores: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/build/**',
+      'tools/demo-kit/out/**',
+      'coverage/**',
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
@@ -17,7 +23,15 @@ export default tseslint.config(
     languageOptions: {
       parserOptions: {
         projectService: {
-          allowDefaultProject: ['*.js', '*.mjs', '*.ts', 'apps/*/*.mjs', 'apps/*/*.ts', 'packages/*/*.ts', 'tools/*/*.ts'],
+          allowDefaultProject: [
+            '*.js',
+            '*.mjs',
+            '*.ts',
+            'apps/*/*.mjs',
+            'apps/*/*.ts',
+            'packages/*/*.ts',
+            'tools/*/*.ts',
+          ],
         },
         tsconfigRootDir: import.meta.dirname,
       },
@@ -43,7 +57,10 @@ export default tseslint.config(
       // --- その他 ---
       // Fastify のプラグインは await がなくても async で書く慣習のため
       '@typescript-eslint/require-await': 'off',
-      '@typescript-eslint/no-unused-vars': ['error', {argsIgnorePattern: '^_', varsIgnorePattern: '^_'}],
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {argsIgnorePattern: '^_', varsIgnorePattern: '^_'},
+      ],
       'no-console': ['error', {allow: ['error']}],
     },
   },

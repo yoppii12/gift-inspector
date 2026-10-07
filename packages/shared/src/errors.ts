@@ -32,28 +32,32 @@ export const ERROR_CATALOG = {
     source: ['web'],
     httpStatus: null,
     category: 'USER_ACTION',
-    userMessage: 'カメラの使用が許可されていません。ブラウザの設定でカメラを許可するか、一覧からオーダーを選んでください。',
+    userMessage:
+      'カメラの使用が許可されていません。ブラウザの設定でカメラを許可するか、一覧からオーダーを選んでください。',
     nextAction: 'SELECT_FROM_LIST',
   },
   CAMERA_UNAVAILABLE: {
     source: ['web'],
     httpStatus: null,
     category: 'USER_ACTION',
-    userMessage: 'カメラを起動できませんでした。他のアプリがカメラを使っていないか確認するか、一覧からオーダーを選んでください。',
+    userMessage:
+      'カメラを起動できませんでした。他のアプリがカメラを使っていないか確認するか、一覧からオーダーを選んでください。',
     nextAction: 'SELECT_FROM_LIST',
   },
   QR_ENGINE_LOAD_FAILED: {
     source: ['web'],
     httpStatus: null,
     category: 'SYSTEM',
-    userMessage: 'コードの読み取り機能を準備できませんでした。ページを再読み込みするか、一覧からオーダーを選んでください。',
+    userMessage:
+      'コードの読み取り機能を準備できませんでした。ページを再読み込みするか、一覧からオーダーを選んでください。',
     nextAction: 'SELECT_FROM_LIST',
   },
   QR_INVALID_FORMAT: {
     source: ['web'],
     httpStatus: null,
     category: 'USER_ACTION',
-    userMessage: 'このコードはデモ用オーダーのコードではありません。オーダーのQRコードを読み取ってください。',
+    userMessage:
+      'このコードはデモ用オーダーのコードではありません。オーダーのQRコードを読み取ってください。',
     nextAction: 'RESCAN',
   },
   IMAGE_DECODE_FAILED: {
@@ -88,7 +92,8 @@ export const ERROR_CATALOG = {
     source: ['web'],
     httpStatus: null,
     category: 'SYSTEM',
-    userMessage: 'サーバーから想定外の応答がありました。最初からやり直してください。続く場合は担当者に連絡してください。',
+    userMessage:
+      'サーバーから想定外の応答がありました。最初からやり直してください。続く場合は担当者に連絡してください。',
     nextAction: 'BACK_TO_START',
   },
   AUTH_REQUIRED: {
@@ -116,7 +121,8 @@ export const ERROR_CATALOG = {
     source: ['edge'],
     httpStatus: 502,
     category: 'SYSTEM',
-    userMessage: '判定サーバーが応答していません。少し待ってから、もう一度お試しください。続く場合は担当者に連絡してください。',
+    userMessage:
+      '判定サーバーが応答していません。少し待ってから、もう一度お試しください。続く場合は担当者に連絡してください。',
     nextAction: 'RETRY',
   },
   UPSTREAM_TIMEOUT: {
@@ -130,7 +136,8 @@ export const ERROR_CATALOG = {
     source: ['api'],
     httpStatus: 400,
     category: 'SYSTEM',
-    userMessage: '送信内容に不備があります。最初からやり直してください。続く場合は担当者に連絡してください。',
+    userMessage:
+      '送信内容に不備があります。最初からやり直してください。続く場合は担当者に連絡してください。',
     nextAction: 'BACK_TO_START',
   },
   ORDER_NOT_FOUND: {
@@ -179,14 +186,16 @@ export const ERROR_CATALOG = {
     source: ['api'],
     httpStatus: 500,
     category: 'SYSTEM',
-    userMessage: '写真を保存できませんでした。もう一度お試しください。続く場合は担当者に連絡してください。',
+    userMessage:
+      '写真を保存できませんでした。もう一度お試しください。続く場合は担当者に連絡してください。',
     nextAction: 'RETRY',
   },
   DB_UNAVAILABLE: {
     source: ['api'],
     httpStatus: 503,
     category: 'SYSTEM',
-    userMessage: 'データベースに接続できません。少し待ってから、もう一度お試しください。続く場合は担当者に連絡してください。',
+    userMessage:
+      'データベースに接続できません。少し待ってから、もう一度お試しください。続く場合は担当者に連絡してください。',
     nextAction: 'RETRY',
   },
   PERSIST_FAILED: {
@@ -221,7 +230,8 @@ export const ERROR_CATALOG = {
     source: ['api'],
     httpStatus: 502,
     category: 'SYSTEM',
-    userMessage: '読み取りサービスに接続できません。少し待ってから、もう一度お試しください。続く場合は担当者に連絡してください。',
+    userMessage:
+      '読み取りサービスに接続できません。少し待ってから、もう一度お試しください。続く場合は担当者に連絡してください。',
     nextAction: 'RETRY',
   },
   AI_AUTH: {
@@ -256,7 +266,8 @@ export const ERROR_CATALOG = {
     source: ['web', 'api'],
     httpStatus: 500,
     category: 'SYSTEM',
-    userMessage: '想定外のエラーが発生しました。最初からやり直してください。続く場合は担当者に連絡してください。',
+    userMessage:
+      '想定外のエラーが発生しました。最初からやり直してください。続く場合は担当者に連絡してください。',
     nextAction: 'BACK_TO_START',
   },
 } as const satisfies Record<string, ErrorDefinition>;

@@ -248,7 +248,7 @@
 | 2 | 不正なAPIキーで再起動 | `AI_AUTH` | error ログ、Slack、試行1回 |
 | 3 | `systemctl stop gift-inspector-api` | `UPSTREAM_UNAVAILABLE` | ヘルスチェックの失敗が Slack に届く |
 | 4 | 端末を機内モードにして送信 | `NETWORK_OFFLINE` | （ログなし。端末側のみ） |
-| 5 | 13MB以上の画像を直接 POST | `UPLOAD_TOO_LARGE` | nginx のログ |
+| 5 | 9MB以上の画像を直接 POST（上限 8MB） | `UPLOAD_TOO_LARGE` | nginx のログ |
 | 6 | 送信中にホーム画面へ戻る | `REQUEST_ABORTED` | API 側は処理を完了し、記録が残る |
 | 7 | 画像ディレクトリを読み取り専用にする | `STORAGE_WRITE_FAILED` | error ログ、Slack、ヘルスチェックの失敗 |
 | 8 | モックAIで不適合応答を2回返す | `UNREADABLE`（NG扱い） | 試行2回分の記録 |

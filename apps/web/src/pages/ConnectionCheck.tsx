@@ -31,7 +31,11 @@ function Section({title, children}: {title: string; children: React.ReactNode}) 
   return (
     <Box
       component="section"
-      sx={{border: `1px solid ${tokens.color.main15}`, borderRadius: `${tokens.radius.card}px`, p: 2}}
+      sx={{
+        border: `1px solid ${tokens.color.main15}`,
+        borderRadius: `${tokens.radius.card}px`,
+        p: 2,
+      }}
     >
       <Typography variant="h2" sx={{mb: 1.5}}>
         {title}
@@ -186,7 +190,11 @@ function QrSection() {
       )}
       {code && <StatusRow ok={!error} label="読み取った値" detail={code} />}
       {order && (
-        <StatusRow ok label="登録済みオーダー" detail={`${order.omotegaki ?? '-'} / ${order.atena ?? '-'}`} />
+        <StatusRow
+          ok
+          label="登録済みオーダー"
+          detail={`${order.omotegaki ?? '-'} / ${order.atena ?? '-'}`}
+        />
       )}
       {error && (
         <Box sx={{mt: 1}}>
@@ -202,9 +210,12 @@ function PhotoSection() {
   const [image, setImage] = useState<(PreparedImage & {url: string}) | null>(null);
   const [error, setError] = useState<ClientError | null>(null);
 
-  useEffect(() => () => {
-    if (image) URL.revokeObjectURL(image.url);
-  }, [image]);
+  useEffect(
+    () => () => {
+      if (image) URL.revokeObjectURL(image.url);
+    },
+    [image]
+  );
 
   const handleFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];

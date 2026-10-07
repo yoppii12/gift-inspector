@@ -4,7 +4,9 @@ import {fileURLToPath} from 'node:url';
 import {MIZUHIKI_TYPES, ORDER_CODE_PATTERN} from '@gift-inspector/shared';
 import {z} from 'zod';
 
-export const DATA_PATH = fileURLToPath(new URL('../../../db/seeds/demo_orders.json', import.meta.url));
+export const DATA_PATH = fileURLToPath(
+  new URL('../../../db/seeds/demo_orders.json', import.meta.url)
+);
 
 const text = z.string().refine(s => s.trim().length > 0, '空文字は不可');
 
@@ -54,7 +56,8 @@ export function validateOrder(order: DemoOrder): string[] {
   const at = (msg: string) => p.push(`${order.orderCode}: ${msg}`);
 
   if (r.noshiRequired) {
-    if (!r.omotegaki || !r.atena || !r.noshiType) at('のし必須なのに表書き・宛名・水引のいずれかが空');
+    if (!r.omotegaki || !r.atena || !r.noshiType)
+      at('のし必須なのに表書き・宛名・水引のいずれかが空');
   } else if (r.omotegaki || r.atena || r.noshiType) {
     at('のし不要なのに表書き・宛名・水引が入っている');
   }

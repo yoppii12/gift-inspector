@@ -49,7 +49,10 @@ async function main(): Promise<void> {
       .then(() => db.end())
       .then(() => process.exit(0))
       .catch((err: unknown) => {
-        app.log.error({err: err instanceof Error ? err.message : String(err)}, '停止処理に失敗しました');
+        app.log.error(
+          {err: err instanceof Error ? err.message : String(err)},
+          '停止処理に失敗しました'
+        );
         process.exit(1);
       });
   };
@@ -65,7 +68,10 @@ main().catch((err: unknown) => {
     JSON.stringify({
       level: 60,
       msg: '起動に失敗しました',
-      err: err instanceof Error ? {name: err.name, message: err.message, stack: err.stack} : String(err),
+      err:
+        err instanceof Error
+          ? {name: err.name, message: err.message, stack: err.stack}
+          : String(err),
     })
   );
   process.exit(1);
