@@ -60,3 +60,24 @@ export interface AiProvider {
   /** 成功時は応答、通信失敗は ProviderError を投げる。SDK の自動リトライは無効にしておくこと */
   read(request: ReadRequest): Promise<ProviderResponse>;
 }
+
+/**
+ * 中断を ProviderError（timeout）にする。1試行のタイムアウト（TimeoutError）と、検品全体の中断
+ * （締め切り・利用者の切断）では記録の意味が違うため、文言で区別する（後者を「AI が遅かった」と
+ * 記録すると、応答時間の計測の判断を誤る）。
+ */
+export function abortError(
+  providerLabel: string,
+  signal: AbortSignal,
+  cause: unknown
+): ProviderError {
+  const reason: unknown = signal.reason;
+  const isAttemptTimeout = reason instanceof Error && reason.name === 'TimeoutError';
+  return new ProviderError(
+    'timeout',
+    isAttemptTimeout
+      ? `${providerLabel} の応答が1試行の制限時間を超えた`
+      : `検品全体の中断により ${providerLabel} の呼び出しを打ち切った`,
+    {cause}
+  );
+}
