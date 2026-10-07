@@ -13,6 +13,7 @@ import {parseArgs} from 'node:util';
 import {TIMEOUTS_MS} from '@gift-inspector/shared';
 
 import {guardedRead} from '../src/ai/guard';
+import {AnthropicProvider, type Effort} from '../src/ai/providers/anthropic';
 import {GoogleProvider} from '../src/ai/providers/google';
 import type {AiProvider} from '../src/ai/types';
 import {type Expected, judge} from '../src/judge/judge';
@@ -23,6 +24,7 @@ const {values, positionals} = parseArgs({
   options: {
     provider: {type: 'string', default: 'google'},
     model: {type: 'string'},
+    effort: {type: 'string'},
     runs: {type: 'string', default: '5'},
     'interval-ms': {type: 'string', default: '3000'},
     // 配置場所によって相対パスが変わるため必須にする（VPS: /srv/gift-inspector/db/seeds/demo_orders.json）
@@ -41,6 +43,13 @@ function createProvider(): AiProvider {
     return new GoogleProvider({
       apiKey: process.env.GEMINI_API_KEY ?? fail('GEMINI_API_KEY がありません'),
       model,
+    });
+  }
+  if (values.provider === 'anthropic') {
+    return new AnthropicProvider({
+      apiKey: process.env.ANTHROPIC_API_KEY ?? fail('ANTHROPIC_API_KEY がありません'),
+      model,
+      effort: (values.effort as Effort | undefined) ?? null,
     });
   }
   return fail(`未対応のプロバイダ: ${values.provider}`);
@@ -62,6 +71,9 @@ const interval = Number(values['interval-ms']);
 if (!Number.isInteger(runs) || runs < 1) fail(`--runs が不正です: ${values.runs}`);
 if (!Number.isFinite(interval) || interval < 0)
   fail(`--interval-ms が不正です: ${values['interval-ms']}`);
+if (values.effort !== undefined && !['low', 'medium', 'high'].includes(values.effort)) {
+  fail(`--effort は low / medium / high のいずれかです: ${values.effort}`);
+}
 if (positionals.length === 0) fail('ORDER=画像パス を1つ以上指定してください');
 
 const out = (line: string) => process.stdout.write(`${line}\n`);
@@ -113,6 +125,8 @@ for (const arg of positionals) {
         run: i,
         provider: provider.name,
         model: provider.model,
+        // 実際に読んだモデル（Claude の fallbacks で別モデルが読んだ場合に分かる）
+        servedBy: read.attempts.at(-1)?.servedModel ?? null,
         overall: j.overall,
         errorCode: j.errorCode,
         totalMs,

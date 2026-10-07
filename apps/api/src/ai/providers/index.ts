@@ -1,5 +1,6 @@
 import type {Config} from '../../config';
 import type {AiProvider} from '../types';
+import {AnthropicProvider} from './anthropic';
 import {GoogleProvider} from './google';
 import {MockProvider} from './mock';
 
@@ -14,6 +15,10 @@ export function createProvider(config: Config): AiProvider {
     case 'google':
       return new GoogleProvider({apiKey: config.GEMINI_API_KEY, model: config.AI_MODEL});
     case 'anthropic':
-      throw new Error('AI_PROVIDER=anthropic はまだ実装されていません（#19）');
+      return new AnthropicProvider({
+        apiKey: config.ANTHROPIC_API_KEY,
+        model: config.AI_MODEL,
+        effort: config.AI_EFFORT || null,
+      });
   }
 }

@@ -4,7 +4,13 @@
  * ここではリトライしない。失敗は ProviderError に、終了理由は guard の分類に合う stopReason に変換する。
  */
 import {JSON_INSTRUCTION, SYSTEM_PROMPT, TOOL_INPUT_SCHEMA, USER_PROMPT} from '../prompt';
-import {type AiProvider, ProviderError, type ProviderResponse, type ReadRequest} from '../types';
+import {
+  abortError,
+  type AiProvider,
+  ProviderError,
+  type ProviderResponse,
+  type ReadRequest,
+} from '../types';
 
 const BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
 /** 思考トークンを含めて打ち切られない程度に大きく取る（出力そのものは100トークン前後） */
@@ -105,7 +111,7 @@ export class GoogleProvider implements AiProvider {
         }
       );
     } catch (err: unknown) {
-      if (request.signal.aborted) throw abortError(request.signal, err);
+      if (request.signal.aborted) throw abortError('Gemini', request.signal, err);
       throw new ProviderError('network', `Gemini に接続できない: ${errorText(err)}`, {cause: err});
     }
 
@@ -113,7 +119,7 @@ export class GoogleProvider implements AiProvider {
     try {
       json = await res.json();
     } catch (err: unknown) {
-      if (request.signal.aborted) throw abortError(request.signal, err);
+      if (request.signal.aborted) throw abortError('Gemini', request.signal, err);
       if (!res.ok) throw httpError(res, {});
       // 成功のステータスなのに本文が壊れている（途中で切れた等）。一時障害として扱い、実際のステータスは文言に残す
       throw new ProviderError(
@@ -128,22 +134,6 @@ export class GoogleProvider implements AiProvider {
     if (!res.ok) throw httpError(res, json as GeminiError);
     return toResponse(json as GeminiResponse);
   }
-}
-
-/**
- * 中断の理由を区別する。1試行のタイムアウト（TimeoutError）と、検品全体の中断（締め切り・利用者の切断）では
- * 記録の意味が違う（後者を「AI が遅かった」と記録すると、応答時間の計測の判断を誤る）。
- */
-export function abortError(signal: AbortSignal, cause: unknown): ProviderError {
-  const reason: unknown = signal.reason;
-  const isAttemptTimeout = reason instanceof Error && reason.name === 'TimeoutError';
-  return new ProviderError(
-    'timeout',
-    isAttemptTimeout
-      ? 'Gemini の応答が1試行の制限時間を超えた'
-      : '検品全体の中断により Gemini の呼び出しを打ち切った',
-    {cause}
-  );
 }
 
 function errorText(err: unknown): string {
@@ -171,6 +161,7 @@ export function toResponse(body: GeminiResponse): ProviderResponse {
   const base = {
     raw: body,
     requestId: body.responseId ?? null,
+    servedModel: body.modelVersion ?? null,
     tokensIn: usage.promptTokenCount ?? null,
     tokensOut:
       usage.candidatesTokenCount === undefined && usage.thoughtsTokenCount === undefined

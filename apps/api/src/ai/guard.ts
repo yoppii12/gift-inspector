@@ -32,6 +32,8 @@ export interface AttemptRecord {
   requestId: string | null;
   tokensIn: number | null;
   tokensOut: number | null;
+  /** 実際に応答したモデル（依頼したモデルと違えば、別モデルが読み直した） */
+  servedModel: string | null;
   raw: unknown;
 }
 
@@ -100,6 +102,8 @@ export function classifyError(err: unknown): Classified {
     if (err.kind === 'network') return {...base, class: 'transient', code: 'AI_UNAVAILABLE'};
     const s = err.status ?? 0;
     if (s === 408) return {...base, class: 'transient', code: 'AI_TIMEOUT'};
+    // 409（競合・処理の中断）は時間をおけば通る類なので一時障害とする（SDK の既定も再試行対象）
+    if (s === 409) return {...base, class: 'transient', code: 'AI_UNAVAILABLE'};
     if (s === 429) return {...base, class: 'transient', code: 'AI_RATE_LIMITED'};
     if (s === 529) return {...base, class: 'transient', code: 'AI_OVERLOADED'};
     if (s >= 500) return {...base, class: 'transient', code: 'AI_UNAVAILABLE'};
@@ -164,6 +168,7 @@ export async function guardedRead(
       requestId: null,
       tokensIn: null,
       tokensOut: null,
+      servedModel: null,
       raw: null,
     };
 
@@ -179,6 +184,7 @@ export async function guardedRead(
         requestId: res.requestId,
         tokensIn: res.tokensIn,
         tokensOut: res.tokensOut,
+        servedModel: res.servedModel ?? null,
         raw: res.raw,
       });
     } catch (err: unknown) {

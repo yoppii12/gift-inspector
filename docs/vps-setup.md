@@ -362,7 +362,9 @@ DB_NAME=gift_inspector
 IMAGE_DIR=/var/lib/gift-inspector/images
 IMAGE_MAX_BYTES=5242880
 AI_PROVIDER=<mock | anthropic | google>
-AI_MODEL=<モデル名。例: gemini-3.5-flash>
+AI_MODEL=<モデル名。例: claude-opus-5-5 / gemini-3.5-flash>
+# Claude の推論の深さ（low | medium | high。空ならモデルの既定）
+AI_EFFORT=
 ANTHROPIC_API_KEY=
 GEMINI_API_KEY=
 REF_MISMATCH_BLOCKS_OK=false

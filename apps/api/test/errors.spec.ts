@@ -179,6 +179,20 @@ describe('設定の検証', () => {
     ).toThrow(/AI_MODEL.*ANTHROPIC_API_KEY|ANTHROPIC_API_KEY.*AI_MODEL/);
   });
 
+  it('AI_EFFORT は anthropic のときだけ指定できる', () => {
+    expect(() =>
+      loadConfig({
+        DB_USER: 'u',
+        DB_NAME: 'n',
+        IMAGE_DIR: '/tmp',
+        AI_PROVIDER: 'google',
+        AI_MODEL: 'g',
+        GEMINI_API_KEY: 'k',
+        AI_EFFORT: 'low',
+      })
+    ).toThrow(/AI_EFFORT/);
+  });
+
   it('google は GEMINI_API_KEY だけが必須で、起動情報にキーを出さない', () => {
     const base = {
       DB_USER: 'u',
