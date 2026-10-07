@@ -3,10 +3,11 @@
  * 印刷する内容は demo_orders.json の printed（現物の内容）。意図的 NG のオーダーは登録内容と違う文字になる。
  *
  * 印刷物には登録内容・想定結果を一切載せない（写真に写り込むと AI に正解の手がかりを与えるため。
- * CLAUDE.md 2章「読取と照合の分離」）。載せるのはオーダー番号と切り取り線だけ。
+ * CLAUDE.md 2章「読取と照合の分離」）。現物の内容のほかに載せるのはオーダー番号・切り取り線・撮影の案内だけ。
  */
 import {createWriteStream} from 'node:fs';
-import {fileURLToPath} from 'node:url';
+import {createRequire} from 'node:module';
+import {dirname, join} from 'node:path';
 
 import PDFDocument from 'pdfkit';
 
@@ -14,8 +15,11 @@ import type {DemoOrder} from './data';
 
 const mm = (v: number) => (v * 72) / 25.4;
 
+const require = createRequire(import.meta.url);
+
+/** フォントの場所は依存の解決で決める（node_modules の階層に依存しない） */
 const font = (pkg: string, file: string) =>
-  fileURLToPath(new URL(`../../../node_modules/@fontsource/${pkg}/files/${file}`, import.meta.url));
+  join(dirname(require.resolve(`@fontsource/${pkg}/package.json`)), 'files', file);
 
 /** 毛筆体（のしの表書き・名入れ）と明朝体（カードの印刷文字）。どちらも OFL-1.1 */
 export const FONTS = {
@@ -24,19 +28,28 @@ export const FONTS = {
   label: font('noto-sans-jp', 'noto-sans-jp-japanese-400-normal.woff'),
 };
 
+// 印刷物は現物（のし紙・水引）を模した小道具なので、アプリのカラールールではなく実物に近い色を使う
 const INK = '#1a1a1a';
 const RED = '#c8102e';
 const GUIDE = '#9d9ea8';
 
-/** 印刷する内容（現物）。登録内容（registered）ではなく printed を使う */
+/** カードの文面の上限（80×120mm のカードに収まる文字数）。data.ts の検証でも使う */
+export const CARD_TEXT_MAX = 120;
+
+/**
+ * 印刷する内容（現物）。登録内容（registered）は一切使わない。
+ * のし・カードを描くかどうかも現物で決める（登録と現物で有無が違うオーダーも作れるように）。
+ */
 export function printedContent(order: DemoOrder) {
+  const p = order.printed;
   return {
     orderCode: order.orderCode,
-    hasNoshi: order.registered.noshiRequired,
-    omotegaki: order.printed.omotegaki,
-    atena: order.printed.atena,
-    mizuhiki: order.printed.noshiType,
-    cardText: order.printed.cardText,
+    hasNoshi: p.omotegaki !== null || p.atena !== null || p.noshiType !== null,
+    hasCard: p.cardText !== null,
+    omotegaki: p.omotegaki,
+    atena: p.atena,
+    mizuhiki: p.noshiType,
+    cardText: p.cardText,
   };
 }
 
@@ -56,7 +69,8 @@ function verticalText(
 ) {
   const chars = [...text];
   const units = chars.reduce((n, c) => n + (c.trim() ? 1 : 0.5), 0);
-  const fitted = Math.min(size, maxHeight / Math.max(1, units) / 1.08);
+  // 最後の文字は送り幅ではなく字の高さ（約1文字分）を占めるので、(units - 1) 回の送り＋1文字で収める
+  const fitted = Math.min(size, maxHeight / (Math.max(0, units - 1) * 1.08 + 1));
   const step = fitted * 1.08;
   doc.fontSize(fitted);
   let y = top;
@@ -73,6 +87,7 @@ function verticalText(
 
 /** 水引（紅白の帯＋蝶結びの輪、または結び切りの結び目） */
 function mizuhiki(doc: Doc, x: number, y: number, width: number, type: string | null) {
+  if (type === null) return; // 水引なし（帯も結び目も描かない）
   const lines = 5;
   const gap = mm(1.4);
   for (let i = 0; i < lines; i++) {
@@ -98,7 +113,7 @@ function mizuhiki(doc: Doc, x: number, y: number, width: number, type: string | 
       .moveTo(cx + mm(2), cy)
       .lineTo(cx + mm(10), cy + mm(22))
       .stroke();
-  } else {
+  } else if (type === '結び切り') {
     // 結び切り: 輪を作らず、交差させて固く結んだ形
     doc
       .moveTo(cx - mm(7), cy - mm(6))
@@ -162,7 +177,12 @@ function drawCard(doc: Doc, c: ReturnType<typeof printedContent>, x: number, y: 
     .font('mincho')
     .fontSize(mm(4.6))
     .fillColor(INK)
-    .text(c.cardText ?? '', x + mm(8), y + mm(18), {width: w - mm(16), lineGap: mm(3)});
+    // 高さを制限して枠からはみ出さないようにする（文字数は CARD_TEXT_MAX で検証済み）
+    .text(c.cardText ?? '', x + mm(8), y + mm(18), {
+      width: w - mm(16),
+      height: h - mm(28),
+      lineGap: mm(3),
+    });
   label(doc, `${c.orderCode} カード（点線で切り取って撮影）`, x, y + h + mm(2));
 }
 
@@ -192,7 +212,7 @@ export async function renderNoshiKitPdf(orders: DemoOrder[], outPath: string): P
     pages++;
     // A4（210mm）に収める: のし 12〜112mm、カード 120〜200mm
     if (c.hasNoshi) drawNoshi(doc, c, mm(12), mm(22));
-    if (c.cardText) drawCard(doc, c, mm(120), mm(22));
+    if (c.hasCard) drawCard(doc, c, mm(120), mm(22));
     label(doc, `擬似のし・カード（社内検証用） ${c.orderCode}`, mm(12), mm(10));
   }
   doc.end();

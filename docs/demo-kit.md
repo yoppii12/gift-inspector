@@ -1,7 +1,7 @@
 # デモキット（デモ用オーダーと撮影用の印刷物）
 
 元データ: `db/seeds/demo_orders.json`（唯一の元データ。SQL シード・QR・印刷物はここから生成する）
-生成: `npm run demo-kit` → `db/seeds/001_demo_orders.sql`、`tools/demo-kit/out/qr/*.png`、`tools/demo-kit/out/<yymmdd>_デモ用QRコード一覧.pdf`
+生成: `npm run demo-kit` → `db/seeds/001_demo_orders.sql`、`tools/demo-kit/out/qr/*.png`、`tools/demo-kit/out/<yymmdd>_デモ用QRコード一覧.pdf`、`tools/demo-kit/out/<yymmdd>_擬似のし・カード.pdf`
 
 ## デモ用オーダー
 
@@ -25,7 +25,8 @@
 - 擬似のし・メッセージカード: `tools/demo-kit/out/<yymmdd>_擬似のし・カード.pdf`（A4 縦、1オーダー1ページ。実物サンプルの受領までの代替）
   - のしは毛筆体（Yuji Syuku）、カードは明朝体（Shippori Mincho）。どちらも OFL-1.1
   - 印刷するのは「現物」（`printed`）の内容。意図的 NG のオーダーは登録と違う文字で印刷される
-  - **印刷物には登録内容・想定結果を載せない**（写真に写り込むと AI に正解の手がかりを与えるため）。載るのはオーダー番号と切り取り線だけ
+  - **印刷物には登録内容・想定結果を載せない**（写真に写り込むと AI に正解の手がかりを与えるため）。載るのは現物の内容のほかは、オーダー番号・切り取り線・「擬似のし・カード（社内検証用）」「点線で切り取って撮影」などの案内だけ
+  - のし・カードを描くかどうかも現物（`printed`）で決める。現物ののしは表書き・宛名・水引を全部入れるか全部空にし、カード文面は 120 文字までにする（`npm run demo-kit` とテストで検証）
 
 ### 印刷と撮影のしかた
 1. A4 に**拡大・縮小なし（100%）**でカラー印刷する

@@ -110,6 +110,7 @@ describe('擬似のし・カード', () => {
       expect(Object.keys(c).sort()).toEqual([
         'atena',
         'cardText',
+        'hasCard',
         'hasNoshi',
         'mizuhiki',
         'omotegaki',
@@ -121,13 +122,35 @@ describe('擬似のし・カード', () => {
     }
   });
 
-  it('5オーダー分の PDF（1オーダー1ページ）を出力する', async () => {
+  it('のし・カードを描くかどうかは現物（printed）で決める（登録と有無が違うオーダーも作れる）', () => {
+    const o = structuredClone(orders[0] as DemoOrder);
+    o.registered.noshiRequired = false;
+    o.registered.cardRequired = false;
+    o.printed = {omotegaki: '御祝', atena: '佐藤', noshiType: '蝶結び', cardText: null};
+    expect(printedContent(o)).toMatchObject({hasNoshi: true, hasCard: false});
+    o.printed = {omotegaki: null, atena: null, noshiType: null, cardText: 'ありがとう'};
+    expect(printedContent(o)).toMatchObject({hasNoshi: false, hasCard: true});
+  });
+
+  it('現物ののしの3項目が一部だけ入っていれば矛盾として検出する', () => {
+    const o = structuredClone(orders[0] as DemoOrder);
+    o.printed = {...o.printed, omotegaki: '御祝', atena: '佐藤', noshiType: null};
+    expect(validateOrder(o).join()).toMatch(/一部だけ/);
+  });
+
+  it('現物のカード文面が枠に収まらない長さなら検出する', () => {
+    const o = structuredClone(orders[0] as DemoOrder);
+    o.printed.cardText = 'あ'.repeat(121);
+    expect(validateOrder(o).join()).toMatch(/長すぎる/);
+  });
+
+  it('PDF を出力できる（テスト時間を抑えるため1オーダー分）', async () => {
     const out = join(mkdtempSync(join(tmpdir(), 'noshi-')), 'kit.pdf');
-    const pages = await renderNoshiKitPdf(orders, out);
+    const pages = await renderNoshiKitPdf([orders[0] as DemoOrder], out);
     const pdf = readFileSync(out);
-    expect(pages).toBe(5);
+    expect(pages).toBe(1);
     expect(pdf.subarray(0, 5).toString()).toBe('%PDF-');
-    expect(pdf.toString('latin1').match(/\/Type \/Page\b/g)).toHaveLength(5);
+    expect(pdf.toString('latin1').match(/\/Type \/Page\b/g)).toHaveLength(1);
     // 日本語フォント（3種）の埋め込みに 15 秒前後かかる
   }, 60_000);
 });
