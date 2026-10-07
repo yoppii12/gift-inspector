@@ -2,7 +2,12 @@ import type {InspectionResult} from '@gift-inspector/shared';
 import {describe, expect, it, vi} from 'vitest';
 
 import {ClientError} from '../src/services/api';
-import {getOrder, newInspectionId, postInspection} from '../src/services/inspection';
+import {
+  findResultProblem,
+  getOrder,
+  newInspectionId,
+  postInspection,
+} from '../src/services/inspection';
 
 const ID = '11111111-1111-4111-8111-111111111111';
 
@@ -13,7 +18,32 @@ function result(overrides: Partial<InspectionResult> = {}): InspectionResult {
     overall: 'OK',
     ngReason: null,
     unreadableReason: null,
-    items: [],
+    items: [
+      {
+        key: 'omotegaki',
+        label: '表書き',
+        result: 'OK',
+        reason: 'MATCH',
+        expected: '御祝',
+        read: '御祝',
+      },
+      {
+        key: 'atena',
+        label: '宛名',
+        result: 'OK',
+        reason: 'MATCH',
+        expected: '佐藤 花子',
+        read: '佐藤 花子',
+      },
+      {
+        key: 'card_text',
+        label: 'メッセージカード',
+        result: 'SKIP',
+        reason: 'NOT_REQUIRED',
+        expected: null,
+        read: null,
+      },
+    ],
     refWarnings: [],
     reference: {
       noshiPresent: true,
@@ -107,5 +137,60 @@ describe('newInspectionId', () => {
     const a = newInspectionId();
     expect(a).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
     expect(newInspectionId()).not.toBe(a);
+  });
+});
+
+describe('findResultProblem（OK でないものを OK と表示しない）', () => {
+  const okResult = () => result();
+  const withItems = (
+    overall: InspectionResult['overall'],
+    results: string[],
+    extra: Partial<InspectionResult> = {}
+  ) =>
+    result({
+      overall,
+      items: results.map((r, i) => ({
+        key: (['omotegaki', 'atena', 'card_text'] as const)[i] ?? 'omotegaki',
+        label: 'x',
+        result: r as InspectionResult['items'][number]['result'],
+        reason: 'MATCH',
+        expected: 'a',
+        read: 'a',
+      })),
+      ...extra,
+    });
+
+  it('整合した結果は問題なし', () => {
+    expect(findResultProblem(okResult())).toBeNull();
+    expect(findResultProblem(withItems('NG', ['OK', 'NG', 'SKIP']))).toBeNull();
+    expect(findResultProblem(withItems('UNREADABLE', ['OK', 'UNREADABLE', 'SKIP']))).toBeNull();
+    expect(
+      findResultProblem(withItems('NG', ['OK', 'OK', 'SKIP'], {ngReason: 'REF_MISMATCH'}))
+    ).toBeNull();
+  });
+
+  it.each([
+    ['OK なのに NG の項目', withItems('OK', ['OK', 'NG', 'SKIP'])],
+    ['OK なのに判定不能の項目', withItems('OK', ['UNREADABLE', 'OK', 'OK'])],
+    ['OK なのに全項目 SKIP', withItems('OK', ['SKIP', 'SKIP', 'SKIP'])],
+    ['NG なのに NG の項目がない', withItems('NG', ['OK', 'OK', 'OK'])],
+    ['判定不能なのに NG の項目', withItems('UNREADABLE', ['NG', 'UNREADABLE', 'OK'])],
+    ['総合が ERROR', withItems('ERROR' as never, ['OK'])],
+    ['項目がない', result({items: []})],
+    ['項目の結果が不正', withItems('OK', ['YES'])],
+  ])('%s は問題として検出する', (_l, r) => {
+    expect(findResultProblem(r)).not.toBeNull();
+  });
+
+  it('矛盾した応答は postInspection が RESPONSE_INVALID にする', async () => {
+    const fetchImpl = vi.fn(() =>
+      Promise.resolve(json(withItems('OK', ['OK', 'NG', 'SKIP'])))
+    ) as unknown as typeof fetch;
+    await expect(
+      postInspection(ID, 'GIFT-DEMO-001', new Blob(['x']), {fetchImpl})
+    ).rejects.toMatchObject({
+      code: 'RESPONSE_INVALID',
+      inspectionId: ID,
+    });
   });
 });

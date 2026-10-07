@@ -2,7 +2,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import QrCodeScannerOutlinedIcon from '@mui/icons-material/QrCodeScannerOutlined';
 import {Box, Button, ButtonBase, CircularProgress, Stack, Typography} from '@mui/material';
 import type {NextAction, OrderView} from '@gift-inspector/shared';
-import {useEffect, useState} from 'react';
+import {useEffect, useRef, useState} from 'react';
 
 import {ErrorPanel} from '../components/ErrorPanel';
 import {AppHeader, Card, Page, SectionTitle, Stepper} from '../components/Layout';
@@ -15,6 +15,8 @@ import {reportClientError} from '../services/report';
 import {tokens} from '../theme';
 
 const {color} = tokens;
+
+const ORDER_LIST_ID = 'order-list';
 
 /** ① オーダー選択: QR 読取または一覧から選び、正解情報を確認して撮影に進む */
 export function OrderSelect({
@@ -73,13 +75,16 @@ export function OrderSelect({
 function ScanSection({onFound}: {onFound: (order: OrderView) => void}) {
   const [scanning, setScanning] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<ClientError | null>(null);
+  // 連続して読み取られても1回だけ処理する（state は描画まで反映されないため ref で持つ）
+  const handlingRef = useRef(false);
+  const [error, setError] = useState<{error: ClientError; occurredAt: Date} | null>(null);
 
   const fail = (err: unknown) => {
     const e = toClientError(err);
+    handlingRef.current = false;
     setScanning(false);
     setBusy(false);
-    setError(e);
+    setError({error: e, occurredAt: new Date()});
     reportClientError(e);
   };
 
@@ -97,7 +102,8 @@ function ScanSection({onFound}: {onFound: (order: OrderView) => void}) {
   };
 
   const handleScan = async (value: string) => {
-    if (busy) return;
+    if (handlingRef.current) return;
+    handlingRef.current = true;
     setScanning(false);
     setBusy(true);
     try {
@@ -109,8 +115,12 @@ function ScanSection({onFound}: {onFound: (order: OrderView) => void}) {
 
   const handleAction = (action: NextAction) => {
     setError(null);
-    if (action === 'RESCAN') void start();
-    // SELECT_FROM_LIST などは下の一覧を使ってもらう
+    if (action === 'RESCAN') {
+      void start();
+      return;
+    }
+    // SELECT_FROM_LIST など: 下の一覧へ移動する
+    document.getElementById(ORDER_LIST_ID)?.scrollIntoView({behavior: 'smooth', block: 'start'});
   };
 
   return (
@@ -142,7 +152,8 @@ function ScanSection({onFound}: {onFound: (order: OrderView) => void}) {
       {error && (
         <Box sx={{mt: 1.5}}>
           <ErrorPanel
-            error={error}
+            error={error.error}
+            occurredAt={error.occurredAt}
             title="オーダーを読み込めませんでした"
             onAction={handleAction}
           />
@@ -176,7 +187,9 @@ function OrderList({onSelect}: {onSelect: (order: OrderView) => void}) {
 
   return (
     <Box>
-      <SectionTitle title="一覧から選ぶ" aside="デモ用オーダー" />
+      <Box id={ORDER_LIST_ID} sx={{scrollMarginTop: 16}}>
+        <SectionTitle title="一覧から選ぶ" aside="デモ用オーダー" />
+      </Box>
       {error ? (
         <ErrorPanel
           error={error}

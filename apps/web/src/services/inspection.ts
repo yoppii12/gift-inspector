@@ -1,6 +1,7 @@
 import {
   INSPECTION_FIELDS,
   type InspectionResult,
+  ITEM_RESULTS,
   ORDER_CODE_PATTERN,
   type OrderView,
 } from '@gift-inspector/shared';
@@ -52,5 +53,37 @@ export async function postInspection(
       detail: `応答の検品 ID・オーダーが送信内容と一致しない（${result.inspectionId} / ${result.orderCode}）`,
     });
   }
+  const problem = findResultProblem(result);
+  if (problem) throw new ClientError('RESPONSE_INVALID', {inspectionId, detail: problem});
   return result;
+}
+
+const OVERALLS = ['OK', 'NG', 'UNREADABLE'] as const;
+
+/**
+ * 判定結果の応答を、表示する前に検証する（「OK でないものを OK と表示しない」画面側の守り）。
+ * 問題があれば理由を返す。サーバーの判定ロジックを複製するのではなく、矛盾だけを検出する。
+ */
+export function findResultProblem(result: unknown): string | null {
+  if (typeof result !== 'object' || result === null) return '応答がオブジェクトではない';
+  const r = result as Partial<InspectionResult>;
+  if (!OVERALLS.includes(r.overall as (typeof OVERALLS)[number]))
+    return `総合結果が不正: ${String(r.overall)}`;
+  if (!Array.isArray(r.items) || r.items.length === 0) return '項目の結果がない';
+  if (!Array.isArray(r.refWarnings)) return '参考判定の警告がない';
+  for (const item of r.items) {
+    if (!ITEM_RESULTS.includes(item?.result)) return `項目の結果が不正: ${String(item?.result)}`;
+  }
+  const judged = r.items.filter(i => i.result !== 'SKIP');
+  if (r.overall === 'OK') {
+    if (judged.length === 0) return '判定した項目がないのに OK';
+    const notOk = judged.find(i => i.result !== 'OK');
+    if (notOk) return `総合が OK なのに ${notOk.key} が ${notOk.result}`;
+  }
+  if (r.overall === 'NG' && r.ngReason !== 'REF_MISMATCH' && !judged.some(i => i.result === 'NG')) {
+    return '総合が NG なのに NG の項目がない';
+  }
+  if (r.overall === 'UNREADABLE' && judged.some(i => i.result === 'NG'))
+    return '総合が判定不能なのに NG の項目がある';
+  return null;
 }

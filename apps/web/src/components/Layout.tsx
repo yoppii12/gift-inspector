@@ -84,15 +84,16 @@ const STEPS = ['読取', '撮影', '判定'] as const;
 export function Stepper({current}: {current: 0 | 1 | 2}) {
   return (
     <Stack
+      component="ol"
       direction="row"
-      sx={{alignItems: 'flex-start', justifyContent: 'center', mb: 2}}
+      sx={{alignItems: 'flex-start', justifyContent: 'center', mb: 2, p: 0, listStyle: 'none'}}
       aria-label="進み具合"
     >
       {STEPS.map((label, i) => {
         const done = i < current;
         const active = i === current;
         return (
-          <Stack key={label} direction="row" sx={{alignItems: 'flex-start'}}>
+          <Stack key={label} component="li" direction="row" sx={{alignItems: 'flex-start'}}>
             {i > 0 && (
               <Box
                 sx={{

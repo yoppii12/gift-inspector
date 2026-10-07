@@ -1,6 +1,7 @@
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import HelpIcon from '@mui/icons-material/Help';
+import WarningAmberRoundedIcon from '@mui/icons-material/WarningAmberRounded';
 import {Box, Stack, Typography} from '@mui/material';
 import {
   type InspectionItem,
@@ -52,13 +53,11 @@ export function ResultView({
         />
       )}
 
-      <OverallAlert result={result} />
-
       {result.refWarnings.length > 0 && (
         <Alert
           accent
-          icon={<ErrorIcon sx={{color: color.accent}} />}
-          title="参考判定の警告"
+          icon={<WarningAmberRoundedIcon sx={{color: color.accent}} />}
+          title="参考判定の警告（現物を確認してください）"
           body={
             <Box component="ul" sx={{m: 0, pl: 2.5}}>
               {result.refWarnings.map(w => (
@@ -68,6 +67,8 @@ export function ResultView({
           }
         />
       )}
+
+      <OverallAlert result={result} />
 
       <SectionTitle title="判定内容" aside={`OK ${okCount}件・要確認 ${attention}件`} />
       <Box>
@@ -84,11 +85,17 @@ export function ResultView({
 
 function OverallAlert({result}: {result: InspectionResult}) {
   if (result.overall === 'OK') {
+    // 参考判定の警告があるときは「出荷に進めます」と言い切らない（D7: 目立つ警告）
+    const warned = result.refWarnings.length > 0;
     return (
       <Alert
         icon={<CheckCircleIcon sx={{color: color.main}} />}
         title="すべて登録内容と一致しました"
-        body="出荷に進めます。"
+        body={
+          warned
+            ? '参考判定に警告があります。現物を確認してから出荷してください。'
+            : '出荷に進めます。'
+        }
       />
     );
   }
@@ -216,14 +223,29 @@ function ItemRow({item}: {item: InspectionItem}) {
           }}
         >
           <Compare label="登録" value={item.expected} />
-          <Compare label="AI読取" value={item.read} strong={strong} />
+          <Compare
+            label="AI読取"
+            value={item.read}
+            strong={strong}
+            emptyText={item.reason === 'NOT_PRESENT' ? '（写っていません）' : '（読み取れず）'}
+          />
         </Box>
       )}
     </Box>
   );
 }
 
-function Compare({label, value, strong}: {label: string; value: string | null; strong?: boolean}) {
+function Compare({
+  label,
+  value,
+  strong,
+  emptyText = '（読み取れず）',
+}: {
+  label: string;
+  value: string | null;
+  strong?: boolean;
+  emptyText?: string;
+}) {
   return (
     <>
       <Typography variant="caption">{label}</Typography>
@@ -235,7 +257,7 @@ function Compare({label, value, strong}: {label: string; value: string | null; s
           color: value === null ? color.main40 : color.main,
         }}
       >
-        {value === null || value === '' ? '（読み取れず）' : value}
+        {value === null || value === '' ? emptyText : value}
       </Typography>
     </>
   );

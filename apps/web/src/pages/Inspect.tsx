@@ -14,6 +14,8 @@ import {tokens} from '../theme';
 
 type State =
   | {kind: 'ready'}
+  // 写真を変換中（この間も操作できないようにする）
+  | {kind: 'preparing'}
   | {kind: 'sending'; inspectionId: string}
   | {kind: 'result'; result: InspectionResult}
   | {kind: 'error'; error: ClientError; occurredAt: Date};
@@ -36,6 +38,8 @@ export function Inspect({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  /** 画面を離れた（アンマウントした）後に送信を始めない・状態を更新しないため */
+  const disposedRef = useRef(false);
   const [state, setState] = useState<State>({kind: 'ready'});
   const [photo, setPhoto] = useState<{blob: Blob; url: string} | null>(null);
 
@@ -53,13 +57,16 @@ export function Inspect({
       if (document.visibilityState === 'hidden') abortRef.current?.abort();
     };
     document.addEventListener('visibilitychange', onHide);
+    disposedRef.current = false;
     return () => {
+      disposedRef.current = true;
       document.removeEventListener('visibilitychange', onHide);
       abortRef.current?.abort();
     };
   }, []);
 
   const send = async (blob: Blob) => {
+    if (disposedRef.current) return;
     const inspectionId = newInspectionId();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -68,7 +75,7 @@ export function Inspect({
       const result = await postInspection(inspectionId, order.orderCode, blob, {
         signal: controller.signal,
       });
-      setState({kind: 'result', result});
+      if (!disposedRef.current) setState({kind: 'result', result});
     } catch (err: unknown) {
       const e = toClientError(err);
       const withId =
@@ -78,11 +85,11 @@ export function Inspect({
               requestId: e.requestId,
               inspectionId,
               detail: e.detail ?? undefined,
-              cause: e,
+              cause: e.cause,
             })
           : e;
       reportClientError(withId);
-      setState({kind: 'error', error: withId, occurredAt: new Date()});
+      if (!disposedRef.current) setState({kind: 'error', error: withId, occurredAt: new Date()});
     } finally {
       abortRef.current = null;
     }
@@ -91,14 +98,20 @@ export function Inspect({
   const handleFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
-    if (!file || state.kind === 'sending') return;
+    if (!file || state.kind === 'sending' || state.kind === 'preparing') return;
+    // 前の結果やボタンを残したまま変換しない（変換中に「次のオーダーへ」を押せないように）
+    setState({kind: 'preparing'});
     try {
       const prepared = await prepareImage(file);
+      if (disposedRef.current) return;
       setPhoto({blob: prepared.blob, url: URL.createObjectURL(prepared.blob)});
       await send(prepared.blob);
     } catch (err: unknown) {
       const e = toClientError(err);
       reportClientError(e);
+      if (disposedRef.current) return;
+      // 読めなかった写真の代わりに前の写真を出さない
+      setPhoto(null);
       setState({kind: 'error', error: e, occurredAt: new Date()});
     }
   };
@@ -124,12 +137,14 @@ export function Inspect({
     }
   };
 
-  const sending = state.kind === 'sending';
-  const finished = state.kind === 'result' || state.kind === 'error';
+  const busy = state.kind === 'sending' || state.kind === 'preparing';
+  // ERROR は判定が行われていないので、判定完了の見た目（ステッパー③・「判定結果」）にしない
+  const judged = state.kind === 'result';
+  const title = judged ? '判定結果' : state.kind === 'error' ? '判定できませんでした' : '撮影';
 
   return (
     <>
-      <AppHeader title={finished ? '判定結果' : '撮影'} onBack={sending ? undefined : onBack} />
+      <AppHeader title={title} onBack={busy ? undefined : onBack} />
       <input
         ref={inputRef}
         type="file"
@@ -162,12 +177,21 @@ export function Inspect({
           ) : undefined
         }
       >
-        <Stepper current={finished ? 2 : 1} />
+        <Stepper current={judged ? 2 : 1} />
         <Typography variant="caption" component="p" sx={{mb: 1}}>
           オーダーNo {order.orderCode}
         </Typography>
 
         {state.kind === 'ready' && <CaptureGuide />}
+
+        {state.kind === 'preparing' && (
+          <Box>
+            <Typography variant="h3" component="p">
+              写真を準備しています
+            </Typography>
+            <LinearProgress sx={{mt: 1.5, borderRadius: 1}} />
+          </Box>
+        )}
 
         {state.kind === 'sending' && (
           <Box>
@@ -177,7 +201,7 @@ export function Inspect({
             </Typography>
             <LinearProgress sx={{mt: 1.5, borderRadius: 1}} />
             <Typography variant="caption" component="p" sx={{mt: 1}}>
-              画面を閉じずにお待ちください（最大1分ほど）
+              画面を閉じずにお待ちください（最大1分半ほど）
             </Typography>
           </Box>
         )}
