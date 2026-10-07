@@ -67,14 +67,16 @@ Claude の場合は `--provider anthropic --model claude-opus-5-5`（推論の�
 
 ## 開発用の手入力モード（正解を手で入れて判定する）
 
-社内検証で、デモ用オーダー以外の文字（実物サンプルなど）を試すための機能（#22）。**デモ環境では必ず無効にする。**
+社内検証で、デモ用オーダー以外の文字（実物サンプルなど）を試すための機能（#22）。アプリの既定は無効（`DEV_MODE_ENABLED=false`）。
+
+**現在の運用（2026/10/08〜、#35）**: VPS（gift-inspector-dev）では**当面有効**にしておく。お客様に見えても問題ないとのオーナー判断による。手入力の検品は `inspections.mode = 'manual'` で記録されるので、デモ用オーダーの検品とは区別して集計できる。
 
 - 有効にする: VPS の `/etc/gift-inspector/api.env` で `DEV_MODE_ENABLED=true` にして `sudo systemctl restart gift-inspector-api`
 - 使う: `https://gift-inspector-dev.laplust.com/?dev=1` を開くと、オーダー選択画面の下に「開発モード（正解を手入力）」が出る。正解を入れて撮影に進む
 - 画面のヘッダーに「開発モード」の目印が出る。記録は `inspections.mode = 'manual'`（オーダーなし、入力した正解を保存）
 - 判定は通常と同じ関数・規則。手入力の正解も AI には渡さない
 - 無効のとき（既定）は、手入力の依頼は `DEV_MODE_DISABLED`（403）で断られる。画面の入口は `?dev=1` を付けても出るが、送信すると上記のエラーになる
-- **無効に戻す**: `DEV_MODE_ENABLED=false` にして再起動。デモの前日に確認する
+- 無効に戻す: `DEV_MODE_ENABLED=false` にして再起動。今の設定は `curl -s http://127.0.0.1:3000/api/health` の `devModeEnabled` で確認できる
 
 ## デモデータの変更
 
