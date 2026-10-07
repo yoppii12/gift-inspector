@@ -45,7 +45,56 @@ echo "設定済みの行数: $(sudo grep -c "^$NAME=." /etc/gift-inspector/api.e
 '
 ```
 
-使うプロバイダを切り替えるときは、`AI_PROVIDER` と `AI_MODEL` を書き換えて `sudo systemctl restart gift-inspector-api`。キーの行は上書きしない（両方のプロバイダのキーを残しておく）。
+使うプロバイダを切り替えるときは、次の「AI の切り替え」の手順で行う。キーの行は上書きしない（両方のプロバイダのキーを残しておく）。
+
+## AI の切り替え（Claude に障害が起きたら Gemini へ）
+
+方針（#25 の計測、2026/10/08、#37）: 通常は **Claude**、予備は **Gemini**。どちらも擬似のし・カードの計測ですべて正しく判定し、応答は 2〜5 秒程度。
+
+| | `AI_PROVIDER` | `AI_MODEL` | `AI_EFFORT` |
+|---|---|---|---|
+| 通常 | `anthropic` | `claude-opus-5-5` | `low` |
+| 予備 | `google` | `gemini-3.5-flash` | 空（**必ず空にする**） |
+
+`AI_EFFORT` は anthropic のときだけ指定できる。指定したまま google にすると設定エラーで API が起動しない。
+
+**切り替えの目安**: 画面で `AI_UNAVAILABLE`・`AI_OVERLOADED`・`AI_TIMEOUT` が続けて出る（再試行しても直らない）、または Anthropic の障害情報（https://status.anthropic.com）で障害が出ている。デモ中なら、迷ったら切り替える（切り替えは 1 分ほどで、戻すのも同じ手順）。
+
+### Gemini に切り替える（VPS 上で）
+
+```bash
+sudo sed -i -e 's/^AI_PROVIDER=.*/AI_PROVIDER=google/' -e 's/^AI_MODEL=.*/AI_MODEL=gemini-3.5-flash/' \
+  -e 's/^AI_EFFORT=.*/AI_EFFORT=/' /etc/gift-inspector/api.env
+sudo grep -E '^AI_(PROVIDER|MODEL|EFFORT)=' /etc/gift-inspector/api.env   # 3行がこの表の「予備」になっているか
+sudo systemctl restart gift-inspector-api
+sleep 5; curl -s http://127.0.0.1:3000/api/health
+```
+
+ヘルスチェックの `"ai":{"ok":true,"detail":"google/gemini-3.5-flash"}` で切り替わったことを確かめ、デモ用オーダー（GIFT-DEMO-001）を1回撮影して OK になることを確認する。
+
+### Claude に戻す（VPS 上で）
+
+```bash
+sudo sed -i -e 's/^AI_PROVIDER=.*/AI_PROVIDER=anthropic/' -e 's/^AI_MODEL=.*/AI_MODEL=claude-opus-5-5/' \
+  -e 's/^AI_EFFORT=.*/AI_EFFORT=low/' /etc/gift-inspector/api.env
+sudo grep -E '^AI_(PROVIDER|MODEL|EFFORT)=' /etc/gift-inspector/api.env   # 3行がこの表の「通常」になっているか
+sudo systemctl restart gift-inspector-api
+sleep 5; curl -s http://127.0.0.1:3000/api/health
+```
+
+`"detail":"anthropic/claude-opus-5-5"` に戻っていることを確認する。`grep` で `AI_EFFORT=` の行が出ないときは、`echo 'AI_EFFORT=low' | sudo tee -a /etc/gift-inspector/api.env` で追記してから再起動する。
+
+### 起動しないとき
+
+ヘルスチェックが応答しないときは、設定エラーの可能性が高い。原因はログに出る。
+
+```bash
+journalctl -u gift-inspector-api -n 30 --no-pager -o cat
+```
+
+`AI_EFFORT`（google なのに値が入っている）、`AI_MODEL`（空）、キーの未設定がよくある原因。直したら再起動する。
+
+どのモデルで判定したかは検品ごとに記録される（`inspections.ai_provider`・`ai_model`）。切り替えの前後で結果を比べるときに使う。
 
 ## AI の計測（案C: プロバイダ・モデルの比較）
 
