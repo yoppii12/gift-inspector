@@ -2,6 +2,7 @@ import {
   INSPECTION_FIELDS,
   type InspectionResult,
   ITEM_RESULTS,
+  MANUAL_ORDER_CODE,
   ORDER_CODE_PATTERN,
   type OrderView,
 } from '@gift-inspector/shared';
@@ -33,11 +34,22 @@ export async function postInspection(
   inspectionId: string,
   orderCode: string,
   image: Blob,
-  options: {signal?: AbortSignal; fetchImpl?: typeof fetch} = {}
+  options: {signal?: AbortSignal; fetchImpl?: typeof fetch; manual?: OrderView | null} = {}
 ): Promise<InspectionResult> {
   const form = new FormData();
   form.append(INSPECTION_FIELDS.inspectionId, inspectionId);
   form.append(INSPECTION_FIELDS.orderCode, orderCode);
+  if (orderCode === MANUAL_ORDER_CODE) {
+    // 開発用の手入力モード: 正解を image より前に入れる（サーバーは DEV_MODE_ENABLED のときだけ受け付ける）
+    const m = options.manual;
+    if (!m) throw new ClientError('SYS_UNEXPECTED', {detail: '手入力モードなのに正解がない'});
+    form.append(INSPECTION_FIELDS.expectedOmotegaki, m.omotegaki ?? '');
+    form.append(INSPECTION_FIELDS.expectedAtena, m.atena ?? '');
+    form.append(INSPECTION_FIELDS.expectedCardText, m.cardText ?? '');
+    form.append(INSPECTION_FIELDS.expectedNoshiType, m.noshiType ?? '');
+    form.append(INSPECTION_FIELDS.noshiRequired, String(m.noshiRequired));
+    form.append(INSPECTION_FIELDS.cardRequired, String(m.cardRequired));
+  }
   form.append(INSPECTION_FIELDS.image, image, 'photo.jpg');
   const result = await request<InspectionResult>('/api/inspections', {
     method: 'POST',
@@ -47,7 +59,12 @@ export async function postInspection(
     fetchImpl: options.fetchImpl,
   });
   // 応答の取り違え（別の検品の結果）を表示しない
-  if (result.inspectionId !== inspectionId || result.orderCode !== orderCode) {
+  const expectedMode = orderCode === MANUAL_ORDER_CODE ? 'manual' : 'order';
+  if (
+    result.inspectionId !== inspectionId ||
+    result.orderCode !== orderCode ||
+    result.mode !== expectedMode
+  ) {
     throw new ClientError('RESPONSE_INVALID', {
       inspectionId,
       detail: `応答の検品 ID・オーダーが送信内容と一致しない（${result.inspectionId} / ${result.orderCode}）`,
@@ -86,4 +103,13 @@ export function findResultProblem(result: unknown): string | null {
   if (r.overall === 'UNREADABLE' && judged.some(i => i.result === 'NG'))
     return '総合が判定不能なのに NG の項目がある';
   return null;
+}
+
+/** URL に ?dev=1 があるときだけ、開発用の手入力モードの入口を出す（サーバー側でも有効化が必要） */
+export function isDevModeRequested(search = location.search): boolean {
+  return new URLSearchParams(search).get('dev') === '1';
+}
+
+export function isManualOrder(order: OrderView): boolean {
+  return order.orderCode === MANUAL_ORDER_CODE;
 }

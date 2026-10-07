@@ -5,11 +5,12 @@ import type {NextAction, OrderView} from '@gift-inspector/shared';
 import {useEffect, useRef, useState} from 'react';
 
 import {ErrorPanel} from '../components/ErrorPanel';
+import {ManualEntry} from '../components/ManualEntry';
 import {AppHeader, Card, Page, SectionTitle, Stepper} from '../components/Layout';
 import {OrderDetails} from '../components/OrderDetails';
 import {QrScanner} from '../components/QrScanner';
 import {type ClientError, toClientError} from '../services/api';
-import {getOrder, listOrders} from '../services/inspection';
+import {getOrder, isDevModeRequested, listOrders} from '../services/inspection';
 import {loadQrEngine} from '../services/qr-engine';
 import {reportClientError} from '../services/report';
 import {tokens} from '../theme';
@@ -67,6 +68,7 @@ export function OrderSelect({
         <Stepper current={0} />
         <ScanSection onFound={setOrder} />
         <OrderList onSelect={setOrder} />
+        {isDevModeRequested() && <ManualEntry onStart={onStart} />}
       </Page>
     </>
   );

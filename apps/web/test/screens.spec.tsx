@@ -8,6 +8,7 @@ import {act, cleanup, fireEvent, render, screen, waitFor} from '@testing-library
 import type {ReactNode} from 'react';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 
+import {ManualEntry} from '../src/components/ManualEntry';
 import {ResultView} from '../src/components/ResultView';
 import {Inspect} from '../src/pages/Inspect';
 import {ClientError} from '../src/services/api';
@@ -22,6 +23,7 @@ const services = vi.hoisted(() => ({
 vi.mock('../src/services/inspection', () => ({
   postInspection: services.postInspection,
   newInspectionId: services.newInspectionId,
+  isManualOrder: (o: {orderCode: string}) => o.orderCode === 'MANUAL',
 }));
 vi.mock('../src/services/media', () => ({prepareImage: services.prepareImage}));
 vi.mock('../src/services/report', () => ({reportClientError: services.reportClientError}));
@@ -46,6 +48,7 @@ function result(overrides: Partial<InspectionResult> = {}): InspectionResult {
   return {
     inspectionId: 'id-1',
     orderCode: 'GIFT-DEMO-001',
+    mode: 'order',
     overall: 'OK',
     ngReason: null,
     unreadableReason: null,
@@ -234,5 +237,34 @@ describe('Inspect（撮影〜送信）', () => {
     await choosePhoto(container);
     await waitFor(() => screen.getByText('IMAGE_DECODE_FAILED'));
     expect(screen.queryByAltText('撮影した写真')).toBeNull();
+  });
+});
+
+describe('ManualEntry（開発用の手入力）', () => {
+  it('入力した正解で、手入力モードのオーダーとして撮影に進む', () => {
+    const onStart = vi.fn();
+    wrap(<ManualEntry onStart={onStart} />);
+    fireEvent.change(screen.getByLabelText(/表書き/), {target: {value: '御礼'}});
+    fireEvent.change(screen.getByLabelText(/名入れ・宛名/), {target: {value: '鈴木 一郎'}});
+    fireEvent.click(screen.getByLabelText('メッセージカードあり'));
+    fireEvent.click(screen.getByRole('button', {name: 'この正解で撮影に進む'}));
+    expect(onStart).toHaveBeenCalledWith({
+      orderCode: 'MANUAL',
+      noshiRequired: true,
+      cardRequired: false,
+      omotegaki: '御礼',
+      atena: '鈴木 一郎',
+      noshiType: '蝶結び',
+      cardText: null,
+    });
+  });
+
+  it('のしもカードもなしでは進めない', () => {
+    wrap(<ManualEntry onStart={vi.fn()} />);
+    fireEvent.click(screen.getByLabelText('のしあり'));
+    fireEvent.click(screen.getByLabelText('メッセージカードあり'));
+    expect(
+      screen.getByRole<HTMLButtonElement>('button', {name: 'この正解で撮影に進む'}).disabled
+    ).toBe(true);
   });
 });

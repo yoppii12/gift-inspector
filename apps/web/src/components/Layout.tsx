@@ -8,7 +8,16 @@ import {tokens} from '../theme';
 const {color} = tokens;
 
 /** アプリバー（main 塗り）。戻る操作がある画面だけ onBack を渡す */
-export function AppHeader({title, onBack}: {title: string; onBack?: () => void}) {
+export function AppHeader({
+  title,
+  onBack,
+  devMode,
+}: {
+  title: string;
+  onBack?: () => void;
+  /** 開発用の手入力モードのとき、通常の検品と見分けられるよう目印を出す */
+  devMode?: boolean;
+}) {
   return (
     <Box
       component="header"
@@ -33,9 +42,25 @@ export function AppHeader({title, onBack}: {title: string; onBack?: () => void})
             <ChevronLeftIcon />
           </IconButton>
         )}
-        <Typography variant="h1" component="h1">
+        <Typography variant="h1" component="h1" sx={{flex: 1}}>
           {title}
         </Typography>
+        {devMode && (
+          <Box
+            component="span"
+            sx={{
+              border: `1px solid ${color.base}`,
+              borderRadius: `${tokens.radius.chip}px`,
+              px: 1.25,
+              py: 0.25,
+              mr: onBack ? 1.5 : 0,
+              fontSize: 12,
+              fontWeight: 600,
+            }}
+          >
+            開発モード
+          </Box>
+        )}
       </Stack>
     </Box>
   );

@@ -66,6 +66,30 @@ export function inspectionForm(inspectionId: string, orderCode: string, image: B
   ]);
 }
 
+export interface ManualExpectedForm {
+  omotegaki?: string;
+  atena?: string;
+  cardText?: string;
+  noshiType?: string;
+  noshiRequired?: string;
+  cardRequired?: string;
+}
+
+/** 開発用の手入力モードの送信内容（正解の項目は image より前） */
+export function manualForm(inspectionId: string, image: Buffer, e: ManualExpectedForm) {
+  return multipart([
+    {name: 'inspection_id', value: inspectionId},
+    {name: 'order_code', value: 'MANUAL'},
+    {name: 'expected_omotegaki', value: e.omotegaki ?? ''},
+    {name: 'expected_atena', value: e.atena ?? ''},
+    {name: 'expected_card_text', value: e.cardText ?? ''},
+    {name: 'expected_noshi_type', value: e.noshiType ?? ''},
+    {name: 'noshi_required', value: e.noshiRequired ?? 'true'},
+    {name: 'card_required', value: e.cardRequired ?? 'true'},
+    {name: 'image', value: image, filename: 'photo.jpg'},
+  ]);
+}
+
 export function tempDir(prefix = 'gi-test-'): string {
   return mkdtempSync(join(tmpdir(), prefix));
 }
