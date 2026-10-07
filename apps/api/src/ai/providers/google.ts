@@ -161,6 +161,7 @@ export function toResponse(body: GeminiResponse): ProviderResponse {
   const base = {
     raw: body,
     requestId: body.responseId ?? null,
+    servedModel: body.modelVersion ?? null,
     tokensIn: usage.promptTokenCount ?? null,
     tokensOut:
       usage.candidatesTokenCount === undefined && usage.thoughtsTokenCount === undefined

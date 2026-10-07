@@ -93,6 +93,13 @@ describe('依頼の内容', () => {
     expect(body).toMatchObject({model: 'claude-opus-5-5', fallbacks: 'default'});
   });
 
+  it('読み直し（fallbacks）の beta ヘッダーを付ける', async () => {
+    const f = mockFetch(message(JSON.stringify(MOCK_READING)));
+    await provider(f).read(request());
+    const headers = new Headers((f.mock.calls[0]?.[1] as RequestInit).headers);
+    expect(headers.get('anthropic-beta')).toContain('server-side-fallback-2026-07-01');
+  });
+
   it('effort を指定したときだけ送る', async () => {
     const f = mockFetch(message(JSON.stringify(MOCK_READING)));
     await provider(f, 'low').read(request());
@@ -126,7 +133,7 @@ describe('応答の変換', () => {
   it.each([
     ['max_tokens', '{"omotegaki":"御', 'max_tokens'],
     ['refusal', null, 'refusal'],
-    ['pause_turn', null, 'pause_turn'],
+    ['pause_turn', null, 'claude:pause_turn'],
   ])('stop_reason=%s は %s', async (stop, text, expected) => {
     const res = await provider(mockFetch(message(text, stop))).read(request());
     expect(res.stopReason).toBe(expected);
@@ -137,12 +144,87 @@ describe('応答の変換', () => {
     expect(res).toMatchObject({stopReason: 'no_output', toolInput: null});
   });
 
-  it('別のモデルが読み直した場合（fallbacks）、そのモデル名が raw に残る', async () => {
-    const res = await provider(
-      mockFetch(message(JSON.stringify(MOCK_READING), 'end_turn', {model: 'claude-opus-4-8'}))
-    ).read(request());
-    expect((res.raw as {model: string}).model).toBe('claude-opus-4-8');
+  it('読み直しがなければ、応答したモデルは依頼したモデル', async () => {
+    const res = await provider(mockFetch(message(JSON.stringify(MOCK_READING)))).read(request());
+    expect(res.servedModel).toBe('claude-opus-5-5');
+    expect(res.requestId).toBe('req_test');
   });
+
+  it('別のモデルが読み直した場合（usage.iterations の fallback_message）、そのモデルを servedModel に残す', async () => {
+    const iter = (type: string, model: string) => ({
+      type,
+      model,
+      input_tokens: 1,
+      output_tokens: 1,
+      cache_creation: null,
+      cache_creation_input_tokens: 0,
+      cache_read_input_tokens: 0,
+    });
+    const body = message(JSON.stringify(MOCK_READING), 'end_turn', {
+      usage: {
+        input_tokens: 1,
+        output_tokens: 1,
+        iterations: [
+          iter('message', 'claude-opus-5-5'),
+          iter('fallback_message', 'claude-opus-4-8'),
+        ],
+      },
+    });
+    const res = await provider(mockFetch(body)).read(request());
+    expect(res.servedModel).toBe('claude-opus-4-8');
+  });
+
+  it('fallback ブロックより前の（拒否したモデルの）途中の出力は使わない', async () => {
+    const body = json({
+      id: 'msg_1',
+      type: 'message',
+      role: 'assistant',
+      model: 'claude-opus-5-5',
+      content: [
+        {type: 'text', text: '{"noshi_pr'},
+        {
+          type: 'fallback',
+          from: {model: 'claude-opus-5-5'},
+          to: {model: 'claude-opus-4-8'},
+          trigger: {type: 'refusal'},
+        },
+        {type: 'text', text: JSON.stringify(MOCK_READING)},
+      ],
+      stop_reason: 'end_turn',
+      stop_sequence: null,
+      usage: {input_tokens: 1, output_tokens: 1},
+    });
+    const res = await provider(mockFetch(body)).read(request());
+    expect(res.toolInput).toEqual(MOCK_READING);
+  });
+
+  it('text ブロックが複数なら連結して読む', async () => {
+    const half = JSON.stringify(MOCK_READING);
+    const body = json({
+      id: 'msg_1',
+      type: 'message',
+      role: 'assistant',
+      model: 'claude-opus-5-5',
+      content: [
+        {type: 'text', text: half.slice(0, 15)},
+        {type: 'text', text: half.slice(15)},
+      ],
+      stop_reason: 'end_turn',
+      stop_sequence: null,
+      usage: {input_tokens: 1, output_tokens: 1},
+    });
+    expect((await provider(mockFetch(body)).read(request())).toolInput).toEqual(MOCK_READING);
+  });
+
+  it.each([null, 'stop_sequence', 'tool_use'])(
+    'stop_reason=%s は tool_use 扱いにしない',
+    async stop => {
+      const res = await provider(
+        mockFetch(message(JSON.stringify(MOCK_READING), stop as string))
+      ).read(request());
+      expect(res.stopReason).not.toBe('tool_use');
+    }
+  );
 });
 
 describe('失敗の変換', () => {
@@ -160,6 +242,14 @@ describe('失敗の変換', () => {
     expect(err).toBeInstanceOf(ProviderError);
     expect(err).toMatchObject({kind: 'http', status, requestId: 'req_test'});
     expect(String((err as Error).message)).not.toContain(KEY);
+  });
+
+  it('SDK 自身のタイムアウト（中断されていない signal）は「1試行の制限時間」の timeout', async () => {
+    const err = await provider(mockFetch(new DOMException('timed out', 'AbortError')))
+      .read(request())
+      .catch((e: unknown) => e);
+    expect(err).toMatchObject({kind: 'timeout'});
+    expect((err as Error).message).toContain('1試行');
   });
 
   it('retry-after ヘッダーを待ち時間として渡す', async () => {
@@ -249,6 +339,15 @@ describe('guard と組み合わせた結果（3.1）', () => {
 
   it('適合する JSON なら ok', async () => {
     expect((await run(message(JSON.stringify(MOCK_READING)))).result.status).toBe('ok');
+  });
+
+  it.each([
+    [408, 'request_timeout', 'AI_TIMEOUT'],
+    [409, 'conflict', 'AI_UNAVAILABLE'],
+  ])('%i は一時障害（%s）として2回試す', async (status, type, code) => {
+    const r = await run(apiError(status, type));
+    expect(r.result).toMatchObject({status: 'error', code});
+    expect(r.calls).toBe(2);
   });
 
   it('529 が2回なら ERROR（AI_OVERLOADED）、2回呼ぶ（SDK は再試行しない）', async () => {

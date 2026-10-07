@@ -71,6 +71,9 @@ const interval = Number(values['interval-ms']);
 if (!Number.isInteger(runs) || runs < 1) fail(`--runs が不正です: ${values.runs}`);
 if (!Number.isFinite(interval) || interval < 0)
   fail(`--interval-ms が不正です: ${values['interval-ms']}`);
+if (values.effort !== undefined && !['low', 'medium', 'high'].includes(values.effort)) {
+  fail(`--effort は low / medium / high のいずれかです: ${values.effort}`);
+}
 if (positionals.length === 0) fail('ORDER=画像パス を1つ以上指定してください');
 
 const out = (line: string) => process.stdout.write(`${line}\n`);
@@ -123,10 +126,7 @@ for (const arg of positionals) {
         provider: provider.name,
         model: provider.model,
         // 実際に読んだモデル（Claude の fallbacks で別モデルが読んだ場合に分かる）
-        servedBy:
-          (read.attempts.at(-1)?.raw as {model?: string; modelVersion?: string} | null)?.model ??
-          (read.attempts.at(-1)?.raw as {modelVersion?: string} | null)?.modelVersion ??
-          null,
+        servedBy: read.attempts.at(-1)?.servedModel ?? null,
         overall: j.overall,
         errorCode: j.errorCode,
         totalMs,

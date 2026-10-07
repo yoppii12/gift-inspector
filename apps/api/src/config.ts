@@ -52,6 +52,13 @@ const envSchema = z
     }
     if (env.AI_PROVIDER !== 'mock') {
       if (!env.AI_MODEL) ctx.addIssue({code: 'custom', path: ['AI_MODEL'], message: '必須です'});
+      if (env.AI_EFFORT && env.AI_PROVIDER !== 'anthropic') {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['AI_EFFORT'],
+          message: 'anthropic のときだけ指定できます',
+        });
+      }
       const keyName = providerKeyName(env.AI_PROVIDER);
       if (keyName && !env[keyName])
         ctx.addIssue({code: 'custom', path: [keyName], message: '必須です'});

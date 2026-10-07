@@ -24,6 +24,8 @@ export interface ProviderResponse {
   requestId: string | null;
   tokensIn: number | null;
   tokensOut: number | null;
+  /** 実際に応答したモデル（Claude の fallbacks で別モデルが読んだ場合など）。不明なら null */
+  servedModel?: string | null;
 }
 
 export type ProviderErrorKind = 'timeout' | 'network' | 'http';
