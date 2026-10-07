@@ -240,6 +240,34 @@ describe('Inspect（撮影〜送信）', () => {
   });
 });
 
+describe('開発モードの目印', () => {
+  const base = {
+    omotegaki: '御祝',
+    atena: '佐藤 花子',
+    cardText: null,
+    noshiType: '蝶結び' as const,
+    noshiRequired: true,
+    cardRequired: false,
+  };
+
+  it('手入力の検品ではヘッダーに「開発モード」を出す', () => {
+    wrap(<Inspect order={{...base, orderCode: 'MANUAL'}} onBack={vi.fn()} onNextOrder={vi.fn()} />);
+    expect(screen.getByText('開発モード')).toBeTruthy();
+    expect(screen.getByText('開発モード（正解を手入力）')).toBeTruthy();
+  });
+
+  it('通常の検品では出さない', () => {
+    wrap(
+      <Inspect
+        order={{...base, orderCode: 'GIFT-DEMO-001'}}
+        onBack={vi.fn()}
+        onNextOrder={vi.fn()}
+      />
+    );
+    expect(screen.queryByText('開発モード')).toBeNull();
+  });
+});
+
 describe('ManualEntry（開発用の手入力）', () => {
   it('入力した正解で、手入力モードのオーダーとして撮影に進む', () => {
     const onStart = vi.fn();

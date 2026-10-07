@@ -48,6 +48,10 @@ export const inspectionRoutes: FastifyPluginAsync<AppDeps> = async (app, deps) =
           }
           image = await part.toBuffer();
         } else {
+          // fieldSize を超えた値は切り詰められて届く。切り詰めた値で判定しない
+          if (part.valueTruncated) {
+            throw new AppError('VALIDATION_FAILED', {detail: `${part.fieldname} が長すぎる`});
+          }
           fields[part.fieldname] = String(part.value);
           // エラー応答にも検品IDを載せられるよう、受け取った時点で控える
           if (part.fieldname === INSPECTION_FIELDS.inspectionId) {
@@ -130,12 +134,18 @@ function parseManualExpected(fields: Record<string, string>): Expected {
   if (noshiType !== null && !(MIZUHIKI_TYPES as readonly string[]).includes(noshiType)) {
     throw new AppError('VALIDATION_FAILED', {detail: `${f.expectedNoshiType} が不正`});
   }
+  const noshiRequired = bool(fields, f.noshiRequired);
+  const cardRequired = bool(fields, f.cardRequired);
+  const omotegaki = text(fields, f.expectedOmotegaki, MAX_LENGTH.omotegaki);
+  const atena = text(fields, f.expectedAtena, MAX_LENGTH.atena);
+  const cardText = text(fields, f.expectedCardText, MAX_LENGTH.cardText);
+  // 不要な項目の値は捨てる（オーダーの規則 ck_noshi / ck_card と同じく、required=false なら null で記録する）
   return {
-    omotegaki: text(fields, f.expectedOmotegaki, MAX_LENGTH.omotegaki),
-    atena: text(fields, f.expectedAtena, MAX_LENGTH.atena),
-    cardText: text(fields, f.expectedCardText, MAX_LENGTH.cardText),
-    noshiType: noshiType as MizuhikiType | null,
-    noshiRequired: bool(fields, f.noshiRequired),
-    cardRequired: bool(fields, f.cardRequired),
+    omotegaki: noshiRequired ? omotegaki : null,
+    atena: noshiRequired ? atena : null,
+    cardText: cardRequired ? cardText : null,
+    noshiType: noshiRequired ? (noshiType as MizuhikiType | null) : null,
+    noshiRequired,
+    cardRequired,
   };
 }

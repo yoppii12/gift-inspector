@@ -418,6 +418,97 @@ describe.skipIf(!enabled)('POST /api/inspections（MySQL）', () => {
       expect(provider.requests).toHaveLength(1);
     });
 
+    it.each([
+      ['水引が選択肢にない', {noshiType: 'あわじ結び'}],
+      ['必須の指定が true / false でない', {noshiRequired: 'yes'}],
+      ['表書きが 65 文字', {omotegaki: 'あ'.repeat(65)}],
+      ['カード文面が 1001 文字', {cardText: 'あ'.repeat(1001)}],
+      ['カード文面が送信の上限（4096 バイト）を超える', {cardText: '🎁'.repeat(1100)}],
+    ])('不正な手入力（%s）は VALIDATION_FAILED で、AI を呼ばない', async (_l, patch) => {
+      const {app, provider} = setup([valid], {devMode: true});
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/inspections',
+        ...manualForm(randomUUID(), fakeJpeg(), {...matching, ...patch}),
+      });
+      expect(res.statusCode).toBe(400);
+      expect((JSON.parse(res.payload) as ErrorResponseBody).error.code).toBe('VALIDATION_FAILED');
+      expect(provider.requests).toHaveLength(0);
+    });
+
+    it('カード文面はちょうど 1000 文字まで受け付ける', async () => {
+      const {app} = setup([valid], {devMode: true});
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/inspections',
+        ...manualForm(randomUUID(), fakeJpeg(), {...matching, cardText: 'あ'.repeat(1000)}),
+      });
+      expect(res.statusCode).toBe(200);
+    });
+
+    it('のしなし・カードなしの項目に値があっても、正解として記録しない（null にする）', async () => {
+      const {app} = setup([valid], {devMode: true});
+      const id = randomUUID();
+      await app.inject({
+        method: 'POST',
+        url: '/api/inspections',
+        ...manualForm(id, fakeJpeg(), {...matching, noshiRequired: 'false'}),
+      });
+      expect(await row(id)).toMatchObject({
+        expected_noshi_required: 0,
+        expected_omotegaki: null,
+        expected_atena: null,
+        expected_noshi_type: null,
+        result_omotegaki: 'SKIP',
+      });
+    });
+
+    it('同じ ID・同じ正解でも、別の画像なら保存済みの結果を返さない', async () => {
+      const {app, provider} = setup([valid], {devMode: true});
+      const id = randomUUID();
+      await app.inject({
+        method: 'POST',
+        url: '/api/inspections',
+        ...manualForm(id, fakeJpeg(), matching),
+      });
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/inspections',
+        ...manualForm(id, fakeJpeg(300), matching),
+      });
+      expect(res.statusCode).toBe(400);
+      expect(provider.requests).toHaveLength(1);
+    });
+
+    it('通常のオーダーに正解の項目を混ぜても、オーダーの登録内容で判定する（正解を上書きできない）', async () => {
+      const {app} = setup([valid], {devMode: true});
+      const id = randomUUID();
+      const form = manualForm(id, fakeJpeg(), {...matching, omotegaki: '偽の正解'});
+      const payload = form.payload.toString('latin1').replace('MANUAL', 'GIFT-DEMO-003');
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/inspections',
+        payload: Buffer.from(payload, 'latin1'),
+        headers: form.headers,
+      });
+      expect(JSON.parse(res.payload)).toMatchObject({mode: 'order', overall: 'NG'});
+      expect(await row(id)).toMatchObject({mode: 'order', expected_omotegaki: '御礼'});
+    });
+
+    it('order_code が小文字の manual なら手入力にならず ORDER_NOT_FOUND', async () => {
+      const {app, provider} = setup([valid], {devMode: true});
+      const form = manualForm(randomUUID(), fakeJpeg(), matching);
+      const payload = form.payload.toString('latin1').replace('MANUAL', 'manual');
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/inspections',
+        payload: Buffer.from(payload, 'latin1'),
+        headers: form.headers,
+      });
+      expect(res.statusCode).toBe(404);
+      expect(provider.requests).toHaveLength(0);
+    });
+
     it('オーダーで判定した ID を手入力で再送しても、保存済みの結果を返さない', async () => {
       const {app} = setup([valid], {devMode: true});
       const id = randomUUID();
