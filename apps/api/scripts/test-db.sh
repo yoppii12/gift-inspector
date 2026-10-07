@@ -52,7 +52,11 @@ if [[ "$MODE" == docker ]]; then
       "$IMAGE" --character-set-server=utf8mb4 --collation-server=utf8mb4_0900_ai_ci \
       --default-time-zone=+00:00 > /dev/null
   fi
-  run_mysql() { docker exec -i "$NAME" mysql -uroot --default-character-set=utf8mb4 "$@"; }
+  # TCP で接続する。MySQL のイメージは初期化中にソケットだけの一時サーバーを立てるため、
+  # ソケット接続で確認すると、本番のサーバー（ホストからの TCP）が起動する前にテストを始めてしまう
+  run_mysql() {
+    docker exec -i "$NAME" mysql -uroot --protocol=tcp -h127.0.0.1 --default-character-set=utf8mb4 "$@"
+  }
 else
   CLIENT=${MYSQL_CLIENT:-mysql}
   command -v "$CLIENT" > /dev/null || fail "MySQL クライアントが見つかりません: $CLIENT"
