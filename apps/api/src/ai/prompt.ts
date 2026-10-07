@@ -1,11 +1,12 @@
 /**
  * AI への読取指示。正解情報（オーダーの登録内容）は一切含めない（CLAUDE.md 2章 ガードレール5）。
  * 文面を変えたら PROMPT_VERSION を上げる（判定記録に残り、結果の差を追えるようにするため）。
+ * read-v2: 返し方の指示をプロバイダ別（tool use / JSON）に分けた
  */
 import {AI_READ_SCHEMA_VERSION, aiReadSchema} from '@gift-inspector/shared';
 import {z} from 'zod';
 
-export const PROMPT_VERSION = 'read-v1';
+export const PROMPT_VERSION = 'read-v2';
 
 export const SYSTEM_PROMPT = `あなたはギフト出荷の検品で、写真に写った「のし」と「メッセージカード」の印刷文字を書き写す担当です。
 

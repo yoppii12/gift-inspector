@@ -105,9 +105,7 @@ export class GoogleProvider implements AiProvider {
         }
       );
     } catch (err: unknown) {
-      if (request.signal.aborted) {
-        throw new ProviderError('timeout', 'Gemini の応答がタイムアウトした', {cause: err});
-      }
+      if (request.signal.aborted) throw abortError(request.signal, err);
       throw new ProviderError('network', `Gemini に接続できない: ${errorText(err)}`, {cause: err});
     }
 
@@ -115,19 +113,37 @@ export class GoogleProvider implements AiProvider {
     try {
       json = await res.json();
     } catch (err: unknown) {
-      if (request.signal.aborted) {
-        throw new ProviderError('timeout', 'Gemini の応答の受信中にタイムアウトした', {cause: err});
-      }
+      if (request.signal.aborted) throw abortError(request.signal, err);
       if (!res.ok) throw httpError(res, {});
-      throw new ProviderError('http', `Gemini の応答を JSON として読めない（HTTP ${res.status}）`, {
-        status: 502,
-        cause: err,
-      });
+      // 成功のステータスなのに本文が壊れている（途中で切れた等）。一時障害として扱い、実際のステータスは文言に残す
+      throw new ProviderError(
+        'network',
+        `Gemini の応答を JSON として読めない（HTTP ${res.status}）`,
+        {
+          cause: err,
+        }
+      );
     }
 
     if (!res.ok) throw httpError(res, json as GeminiError);
     return toResponse(json as GeminiResponse);
   }
+}
+
+/**
+ * 中断の理由を区別する。1試行のタイムアウト（TimeoutError）と、検品全体の中断（締め切り・利用者の切断）では
+ * 記録の意味が違う（後者を「AI が遅かった」と記録すると、応答時間の計測の判断を誤る）。
+ */
+export function abortError(signal: AbortSignal, cause: unknown): ProviderError {
+  const reason: unknown = signal.reason;
+  const isAttemptTimeout = reason instanceof Error && reason.name === 'TimeoutError';
+  return new ProviderError(
+    'timeout',
+    isAttemptTimeout
+      ? 'Gemini の応答が1試行の制限時間を超えた'
+      : '検品全体の中断により Gemini の呼び出しを打ち切った',
+    {cause}
+  );
 }
 
 function errorText(err: unknown): string {

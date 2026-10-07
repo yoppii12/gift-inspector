@@ -138,6 +138,38 @@ describe('応答の変換', () => {
     expect(res).toMatchObject({stopReason: 'refusal', toolInput: null});
   });
 
+  it('finishReason がなければ tool_use 扱いにしない', async () => {
+    const body = json({candidates: [{content: {parts: [{text: JSON.stringify(MOCK_READING)}]}}]});
+    const res = await provider(fetchReturning(body)).read(request());
+    expect(res.stopReason).not.toBe('tool_use');
+  });
+
+  it('JSON が複数パートに分かれていれば連結して読む。2つの JSON が並べば不正', async () => {
+    const half = JSON.stringify(MOCK_READING);
+    const split = json({
+      candidates: [
+        {
+          content: {parts: [{text: half.slice(0, 20)}, {text: half.slice(20)}]},
+          finishReason: 'STOP',
+        },
+      ],
+    });
+    expect((await provider(fetchReturning(split)).read(request())).toolInput).toEqual(MOCK_READING);
+    const twice = json({
+      candidates: [{content: {parts: [{text: half}, {text: half}]}, finishReason: 'STOP'}],
+    });
+    expect((await provider(fetchReturning(twice)).read(request())).toolInput).toBe(UNPARSEABLE);
+  });
+
+  it.each(['null', '"御祝"', '42', '[]'])(
+    'JSON のプリミティブ・配列（%s）は guard で不適合になる値として渡す',
+    async text => {
+      const res = await provider(fetchReturning(ok(text))).read(request());
+      expect(res.stopReason).toBe('tool_use');
+      expect(res.toolInput).not.toMatchObject({noshi_present: expect.anything()});
+    }
+  );
+
   it('STOP なのに本文が空なら no_output（tool_use 扱いにしない）', async () => {
     const res = await provider(fetchReturning(ok(''))).read(request());
     expect(res).toMatchObject({stopReason: 'no_output', toolInput: null});
@@ -181,6 +213,46 @@ describe('失敗の変換', () => {
     expect(err).toMatchObject({kind: 'timeout'});
   });
 
+  it('1試行のタイムアウトと、検品全体の中断を文言で区別する（どちらも timeout）', async () => {
+    const attempt = new AbortController();
+    attempt.abort(new DOMException('t', 'TimeoutError'));
+    const outer = new AbortController();
+    outer.abort(new Error('inspection timeout'));
+    const abortErr = new DOMException('aborted', 'AbortError');
+    const a = (await provider(fetchReturning(abortErr))
+      .read(request(attempt.signal))
+      .catch((e: unknown) => e)) as ProviderError;
+    const b = (await provider(fetchReturning(abortErr))
+      .read(request(outer.signal))
+      .catch((e: unknown) => e)) as ProviderError;
+    expect(a.kind).toBe('timeout');
+    expect(b.kind).toBe('timeout');
+    expect(a.message).toContain('1試行');
+    expect(b.message).toContain('検品全体の中断');
+  });
+
+  it('成功のステータスで本文が壊れていれば network（ステータスを捏造しない）', async () => {
+    const broken = new Response('{"candidates": [', {
+      status: 200,
+      headers: {'content-type': 'application/json'},
+    });
+    const err = (await provider(fetchReturning(broken))
+      .read(request())
+      .catch((e: unknown) => e)) as ProviderError;
+    expect(err).toMatchObject({kind: 'network', status: null});
+    expect(err.message).toContain('HTTP 200');
+  });
+
+  it('Retry-After ヘッダー（秒）も待ち時間として渡す', async () => {
+    const res = json({error: {code: 429, status: 'RESOURCE_EXHAUSTED', message: 'x'}}, 429, {
+      'retry-after': '4',
+    });
+    const err = (await provider(fetchReturning(res))
+      .read(request())
+      .catch((e: unknown) => e)) as ProviderError;
+    expect(err.retryAfterMs).toBe(4_000);
+  });
+
   it('エラー本文が JSON でなくても、ステータスで ProviderError になる', async () => {
     const html = new Response('<html>502</html>', {
       status: 502,
@@ -195,6 +267,23 @@ describe('失敗の変換', () => {
   it('キーやモデルが空なら作れない（起動時に失敗させる）', () => {
     expect(() => new GoogleProvider({apiKey: '', model: 'm'})).toThrow('GEMINI_API_KEY');
     expect(() => new GoogleProvider({apiKey: 'k', model: ''})).toThrow('AI_MODEL');
+  });
+});
+
+describe('キーが記録に残らない', () => {
+  it('応答の raw・エラーの記録（試行の detail）にキーが含まれない', async () => {
+    const deps: GuardDeps = {now: () => 0, sleep: () => Promise.resolve()};
+    const r1 = await guardedRead(
+      provider(fetchReturning(ok(JSON.stringify(MOCK_READING)))),
+      {image: Buffer.from('x'), mimeType: 'image/jpeg', inspectionId: 'i'},
+      {deadline: TIMEOUTS_MS.inspectionTotal, signal: new AbortController().signal, deps}
+    );
+    const r2 = await guardedRead(
+      provider(fetchReturning(apiError(403, 'PERMISSION_DENIED'))),
+      {image: Buffer.from('x'), mimeType: 'image/jpeg', inspectionId: 'i'},
+      {deadline: TIMEOUTS_MS.inspectionTotal, signal: new AbortController().signal, deps}
+    );
+    expect(JSON.stringify([r1.attempts, r2.attempts])).not.toContain(KEY);
   });
 });
 
