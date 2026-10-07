@@ -4,6 +4,8 @@ import {fileURLToPath} from 'node:url';
 import {MIZUHIKI_TYPES, ORDER_CODE_PATTERN} from '@gift-inspector/shared';
 import {z} from 'zod';
 
+import {CARD_TEXT_MAX} from './noshi';
+
 export const DATA_PATH = fileURLToPath(
   new URL('../../../db/seeds/demo_orders.json', import.meta.url)
 );
@@ -63,6 +65,15 @@ export function validateOrder(order: DemoOrder): string[] {
   }
   if (r.cardRequired !== (r.cardText !== null)) at('カード必須とカード文面の有無が一致しない');
   if (!r.noshiRequired && !r.cardRequired) at('のしもカードも不要');
+
+  // 現物（印刷物）側の整合: のしの3項目は全部あるか全部ないか。カードの文面は枠に収まる長さか
+  const pr = order.printed;
+  const noshiParts = [pr.omotegaki, pr.atena, pr.noshiType].filter(v => v !== null).length;
+  if (noshiParts !== 0 && noshiParts !== 3)
+    at('現物ののしの表書き・宛名・水引が一部だけ入っている');
+  if (pr.cardText !== null && [...pr.cardText].length > CARD_TEXT_MAX) {
+    at(`現物のカード文面が長すぎる（${CARD_TEXT_MAX} 文字まで）`);
+  }
 
   // 想定結果と「登録 vs 印刷」の差分が一致しているか（主判定の項目のみ）
   const diffs = [

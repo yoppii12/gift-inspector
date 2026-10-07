@@ -1,4 +1,6 @@
-import {readFileSync} from 'node:fs';
+import {mkdtempSync, readFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 import jsQR from 'jsqr';
@@ -6,6 +8,7 @@ import {PNG} from 'pngjs';
 import {describe, expect, it} from 'vitest';
 
 import {type DemoOrder, loadDemoOrders, validateOrder} from '../src/data';
+import {printedContent, renderNoshiKitPdf} from '../src/noshi';
 import {renderQrPng} from '../src/qr';
 import {SEED_SQL_RELATIVE_PATH, renderSeedSql} from '../src/seed-sql';
 
@@ -87,4 +90,67 @@ describe('SQL の生成', () => {
     o.printed.cardText = o.registered.cardText;
     expect(renderSeedSql([o])).toContain("'It''s \\\\ ok'");
   });
+});
+
+describe('擬似のし・カード', () => {
+  it('印刷するのは現物の内容（printed）で、意図的 NG のオーダーは登録内容と違う文字になる', () => {
+    const byCode = Object.fromEntries(orders.map(o => [o.orderCode, o]));
+    const c3 = printedContent(byCode['GIFT-DEMO-003'] as DemoOrder);
+    const c4 = printedContent(byCode['GIFT-DEMO-004'] as DemoOrder);
+    const c5 = printedContent(byCode['GIFT-DEMO-005'] as DemoOrder);
+    expect(c3.omotegaki).toBe('御祝');
+    expect(c3.omotegaki).not.toBe(byCode['GIFT-DEMO-003']?.registered.omotegaki);
+    expect(c4.atena).toBe('渡部 直樹');
+    expect(c5.cardText).toContain('ご多幸');
+  });
+
+  it('印刷物に載せる情報は、のし・カードの現物の内容とオーダー番号だけ（登録内容・想定結果は載せない）', () => {
+    for (const o of orders) {
+      const c = printedContent(o);
+      expect(Object.keys(c).sort()).toEqual([
+        'atena',
+        'cardText',
+        'hasCard',
+        'hasNoshi',
+        'mizuhiki',
+        'omotegaki',
+        'orderCode',
+      ]);
+      const text = JSON.stringify(c);
+      expect(text).not.toContain(o.note);
+      expect(text).not.toContain('想定');
+    }
+  });
+
+  it('のし・カードを描くかどうかは現物（printed）で決める（登録と有無が違うオーダーも作れる）', () => {
+    const o = structuredClone(orders[0] as DemoOrder);
+    o.registered.noshiRequired = false;
+    o.registered.cardRequired = false;
+    o.printed = {omotegaki: '御祝', atena: '佐藤', noshiType: '蝶結び', cardText: null};
+    expect(printedContent(o)).toMatchObject({hasNoshi: true, hasCard: false});
+    o.printed = {omotegaki: null, atena: null, noshiType: null, cardText: 'ありがとう'};
+    expect(printedContent(o)).toMatchObject({hasNoshi: false, hasCard: true});
+  });
+
+  it('現物ののしの3項目が一部だけ入っていれば矛盾として検出する', () => {
+    const o = structuredClone(orders[0] as DemoOrder);
+    o.printed = {...o.printed, omotegaki: '御祝', atena: '佐藤', noshiType: null};
+    expect(validateOrder(o).join()).toMatch(/一部だけ/);
+  });
+
+  it('現物のカード文面が枠に収まらない長さなら検出する', () => {
+    const o = structuredClone(orders[0] as DemoOrder);
+    o.printed.cardText = 'あ'.repeat(121);
+    expect(validateOrder(o).join()).toMatch(/長すぎる/);
+  });
+
+  it('PDF を出力できる（テスト時間を抑えるため1オーダー分）', async () => {
+    const out = join(mkdtempSync(join(tmpdir(), 'noshi-')), 'kit.pdf');
+    const pages = await renderNoshiKitPdf([orders[0] as DemoOrder], out);
+    const pdf = readFileSync(out);
+    expect(pages).toBe(1);
+    expect(pdf.subarray(0, 5).toString()).toBe('%PDF-');
+    expect(pdf.toString('latin1').match(/\/Type \/Page\b/g)).toHaveLength(1);
+    // 日本語フォント（3種）の埋め込みに 15 秒前後かかる
+  }, 60_000);
 });

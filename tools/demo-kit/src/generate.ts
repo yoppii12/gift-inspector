@@ -1,6 +1,6 @@
 /**
  * デモ用データ一式を生成する。
- *   npm run demo-kit                 SQL シード + QR（PNG）+ 印刷用 QR 一覧（PDF）
+ *   npm run demo-kit                 SQL シード + QR（PNG）+ 印刷用 QR 一覧（PDF）+ 擬似のし・カード（PDF）
  *   npm run seed-sql -w @gift-inspector/demo-kit   SQL シードのみ
  * 出力先: db/seeds/001_demo_orders.sql、tools/demo-kit/out/
  */
@@ -9,6 +9,7 @@ import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 import {loadDemoOrders} from './data';
+import {renderNoshiKitPdf} from './noshi';
 import {renderQrPng, renderQrSheetPdf} from './qr';
 import {SEED_SQL_RELATIVE_PATH, renderSeedSql} from './seed-sql';
 
@@ -40,6 +41,10 @@ async function main(): Promise<void> {
   const printedOn = now.toLocaleDateString('ja-JP', {timeZone: 'Asia/Tokyo'});
   await renderQrSheetPdf(orders, pdfPath, printedOn);
   console.log(`印刷用 PDF: ${pdfPath}`);
+
+  const noshiPath = join(OUT_DIR, `${yymmdd(now)}_擬似のし・カード.pdf`);
+  const pages = await renderNoshiKitPdf(orders, noshiPath);
+  console.log(`擬似のし・カード PDF: ${noshiPath}（${pages}ページ）`);
 }
 
 main().catch((err: unknown) => {
