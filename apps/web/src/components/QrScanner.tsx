@@ -42,6 +42,8 @@ export function QrScanner({onScan, onError}: Props) {
         formats={['qr_code']}
         constraints={constraints}
         components={{finder: true}}
+        // 効果音は data: URL で再生され、本番の CSP（media-src 'self' blob:）で拒否されてコンソールエラーになるため無効化する（#5）
+        sound={false}
         onScan={codes => {
           const first = codes[0];
           if (first) onScan(first.rawValue);
