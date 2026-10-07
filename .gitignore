@@ -1,0 +1,23 @@
+# 依存・ビルド成果物
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# 秘匿情報（.env.example 以外の env はコミットしない）
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.htpasswd
+
+# 生成物
+tools/demo-kit/out/
+var/
+
+# OS・エディタ
+.DS_Store
+.vscode/
+.idea/

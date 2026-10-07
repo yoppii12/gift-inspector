@@ -1,0 +1,100 @@
+{
+  "$comment": "デモ用オーダーの唯一の元データ。編集したら `npm run demo-kit` で SQL シード・QR・印刷物を再生成する。人名・文面はすべて架空。registered=DBに登録する正解、printed=撮影用に印刷する現物の内容。",
+  "orders": [
+    {
+      "orderCode": "GIFT-DEMO-001",
+      "registered": {
+        "omotegaki": "御祝",
+        "atena": "佐藤 花子",
+        "cardText": "ご出産おめでとうございます。心ばかりの品をお贈りします。",
+        "noshiType": "蝶結び",
+        "noshiRequired": true,
+        "cardRequired": true
+      },
+      "printed": {
+        "omotegaki": "御祝",
+        "atena": "佐藤 花子",
+        "cardText": "ご出産おめでとうございます。心ばかりの品をお贈りします。",
+        "noshiType": "蝶結び"
+      },
+      "expected": "OK",
+      "note": "登録内容どおり（のし＋カード）"
+    },
+    {
+      "orderCode": "GIFT-DEMO-002",
+      "registered": {
+        "omotegaki": "内祝",
+        "atena": "高橋 健一",
+        "cardText": null,
+        "noshiType": "蝶結び",
+        "noshiRequired": true,
+        "cardRequired": false
+      },
+      "printed": {
+        "omotegaki": "内祝",
+        "atena": "高橋 健一",
+        "cardText": null,
+        "noshiType": "蝶結び"
+      },
+      "expected": "OK",
+      "note": "カードなしのオーダー（のしのみ）"
+    },
+    {
+      "orderCode": "GIFT-DEMO-003",
+      "registered": {
+        "omotegaki": "御礼",
+        "atena": "鈴木 一郎",
+        "cardText": "このたびは大変お世話になりました。心ばかりの品をお贈りいたします。",
+        "noshiType": "蝶結び",
+        "noshiRequired": true,
+        "cardRequired": true
+      },
+      "printed": {
+        "omotegaki": "御祝",
+        "atena": "鈴木 一郎",
+        "cardText": "このたびは大変お世話になりました。心ばかりの品をお贈りいたします。",
+        "noshiType": "蝶結び"
+      },
+      "expected": "NG",
+      "note": "表書きNG（登録「御礼」／現物「御祝」）"
+    },
+    {
+      "orderCode": "GIFT-DEMO-004",
+      "registered": {
+        "omotegaki": "快気祝",
+        "atena": "渡辺 直樹",
+        "cardText": null,
+        "noshiType": "結び切り",
+        "noshiRequired": true,
+        "cardRequired": false
+      },
+      "printed": {
+        "omotegaki": "快気祝",
+        "atena": "渡部 直樹",
+        "cardText": null,
+        "noshiType": "結び切り"
+      },
+      "expected": "NG",
+      "note": "宛名NG（登録「渡辺」／現物「渡部」の1文字違い）"
+    },
+    {
+      "orderCode": "GIFT-DEMO-005",
+      "registered": {
+        "omotegaki": "寿",
+        "atena": "山本 恵",
+        "cardText": "ご結婚おめでとうございます。お二人の末永いお幸せをお祈りいたします。",
+        "noshiType": "結び切り",
+        "noshiRequired": true,
+        "cardRequired": true
+      },
+      "printed": {
+        "omotegaki": "寿",
+        "atena": "山本 恵",
+        "cardText": "ご結婚おめでとうございます。お二人の末永いご多幸をお祈りいたします。",
+        "noshiType": "結び切り"
+      },
+      "expected": "NG",
+      "note": "カードNG（登録「お幸せを」／現物「ご多幸を」）"
+    }
+  ]
+}
