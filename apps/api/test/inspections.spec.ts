@@ -11,7 +11,7 @@ import {MOCK_READING, MockProvider} from '../src/ai/providers/mock';
 import {buildApp} from '../src/app';
 import {loadConfig} from '../src/config';
 import type {Db} from '../src/db/pool';
-import {inspectImage} from '../src/storage/images';
+import {inspectImage, saveImage} from '../src/storage/images';
 import {fakeHeic, fakeJpeg, inspectionForm, multipart, tempDir} from './helpers';
 
 describe('画像の検査', () => {
@@ -39,6 +39,15 @@ describe('画像の検査', () => {
     ['テキスト', Buffer.from('this is not an image at all, really')],
   ])('%s は IMAGE_UNSUPPORTED_TYPE', (_label, buf) => {
     expect(() => inspectImage(buf)).toThrow('IMAGE_UNSUPPORTED_TYPE');
+  });
+
+  it('寸法が DB の列に入らない PNG は IMAGE_INVALID', () => {
+    const png = Buffer.alloc(64);
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(png, 0);
+    png.writeUInt32BE(70_000, 16);
+    png.writeUInt32BE(100, 20);
+    Buffer.from('IEND', 'latin1').copy(png, 50);
+    expect(() => inspectImage(png)).toThrow('IMAGE_INVALID');
   });
 
   it('小さすぎるデータは IMAGE_INVALID', () => {
@@ -69,6 +78,25 @@ function error(payload: string): ErrorResponseBody['error'] {
   return (JSON.parse(payload) as ErrorResponseBody).error;
 }
 
+describe('画像の保存', () => {
+  const now = new Date('2026-10-07T00:00:00Z');
+  const id = '11111111-1111-4111-8111-111111111111';
+  const meta = {mime: 'image/jpeg' as const, ext: 'jpg' as const, width: null, height: null};
+
+  it('同名ファイルが同じ中身ならそのまま使う（再送）', async () => {
+    const dir = tempDir();
+    const a = await saveImage(dir, id, fakeJpeg(), meta, now);
+    const b = await saveImage(dir, id, fakeJpeg(), meta, now);
+    expect(b).toEqual(a);
+  });
+
+  it('同名ファイルの中身が違えば VALIDATION_FAILED（保存画像と記録を食い違わせない）', async () => {
+    const dir = tempDir();
+    await saveImage(dir, id, fakeJpeg(), meta, now);
+    await expect(saveImage(dir, id, fakeJpeg(300), meta, now)).rejects.toThrow('VALIDATION_FAILED');
+  });
+});
+
 describe('POST /api/inspections（DB なし）', () => {
   it('multipart でなければ VALIDATION_FAILED', async () => {
     const {app} = setup();
@@ -84,6 +112,28 @@ describe('POST /api/inspections（DB なし）', () => {
       url: '/api/inspections',
       ...inspectionForm('abc', 'GIFT-DEMO-001', fakeJpeg()),
     });
+    expect(error(res.payload).code).toBe('VALIDATION_FAILED');
+  });
+
+  it('UUID v4 以外の inspection_id は VALIDATION_FAILED', async () => {
+    const {app} = setup();
+    const v1 = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/inspections',
+      ...inspectionForm(v1, 'GIFT-DEMO-001', fakeJpeg()),
+    });
+    expect(error(res.payload).code).toBe('VALIDATION_FAILED');
+  });
+
+  it('フィールドが多すぎる送信は VALIDATION_FAILED（SYS_UNEXPECTED にしない）', async () => {
+    const {app} = setup();
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/inspections',
+      ...multipart(Array.from({length: 6}, (_, i) => ({name: `f${i}`, value: 'x'}))),
+    });
+    expect(res.statusCode).toBe(400);
     expect(error(res.payload).code).toBe('VALIDATION_FAILED');
   });
 

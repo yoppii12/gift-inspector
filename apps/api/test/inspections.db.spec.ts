@@ -134,7 +134,54 @@ describe.skipIf(!enabled)('POST /api/inspections（MySQL）', () => {
       post(app, id, 'GIFT-DEMO-001'),
     ]);
     expect(provider.requests).toHaveLength(1);
-    for (const r of results) expect(r.payload).not.toMatch(/"overall":"(NG|UNREADABLE)"/);
+    // 片方は判定して 200 / OK。もう片方は保存済みの結果（200 / replayed）か、処理中（409）
+    const outcomes = results.map(r => {
+      const body = JSON.parse(r.payload) as Partial<InspectionResult> & Partial<ErrorResponseBody>;
+      return r.statusCode === 200
+        ? `200:${body.overall}:${String(body.replayed)}`
+        : `${r.statusCode}:${body.error?.code}`;
+    });
+    expect(outcomes).toContain('200:OK:false');
+    const other = outcomes.find(o => o !== '200:OK:false') ?? outcomes[1];
+    expect(['200:OK:true', '409:INSPECTION_IN_PROGRESS', '200:OK:false']).toContain(other);
+    expect(outcomes.filter(o => o === '200:OK:false')).toHaveLength(1);
+  });
+
+  it.each([
+    ['別の画像', 'GIFT-DEMO-001', fakeJpeg(200)],
+    ['別のオーダー', 'GIFT-DEMO-003', fakeJpeg()],
+  ])(
+    '同じ inspection_id で%sを送っても、保存済みの結果は返さない（VALIDATION_FAILED）',
+    async (_l, order, image) => {
+      const {app, provider} = setup();
+      const id = randomUUID();
+      expect((await post(app, id, 'GIFT-DEMO-001')).statusCode).toBe(200);
+      const res = await post(app, id, order, image);
+      expect(res.statusCode).toBe(400);
+      expect((JSON.parse(res.payload) as ErrorResponseBody).error).toMatchObject({
+        code: 'VALIDATION_FAILED',
+        inspectionId: id,
+      });
+      expect(res.payload).not.toContain('"overall"');
+      expect(provider.requests).toHaveLength(1);
+      expect(await row(id)).toMatchObject({overall: 'OK', order_id: 1});
+    }
+  );
+
+  it('判定が ERROR になった検品は、再試行で直る種類（AI_TIMEOUT）でも通知され、詳細が記録される', async () => {
+    const {app} = setup([{type: 'error', error: new ProviderError('timeout', 'mock timeout')}]);
+    const id = randomUUID();
+    notify.mockClear();
+    const res = await post(app, id, 'GIFT-DEMO-001');
+    expect(res.statusCode).toBe(504);
+    expect(notify).toHaveBeenCalledWith(
+      expect.objectContaining({key: 'inspection:ERROR:AI_TIMEOUT'})
+    );
+    expect(await row(id)).toMatchObject({
+      overall: 'ERROR',
+      error_code: 'AI_TIMEOUT',
+      error_detail: 'mock timeout',
+    });
   });
 
   it('AI の設定不備は AI_AUTH（502）で、ERROR として記録され、OK を返さない', async () => {
