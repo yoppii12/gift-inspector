@@ -57,3 +57,18 @@ export async function findOrder(db: Db, orderCode: string): Promise<DemoOrder | 
     return row ? toOrder(row) : null;
   });
 }
+
+/** 検品の記録用に内部 ID つきで取得する（API の応答には ID を出さない） */
+export async function findOrderWithId(
+  db: Db,
+  orderCode: string
+): Promise<{id: number; order: DemoOrder} | null> {
+  return withDb(async () => {
+    const [rows] = await db.query<(OrderRow & {id: number})[]>(
+      `SELECT id, ${COLUMNS} FROM demo_orders WHERE order_code = ?`,
+      [orderCode]
+    );
+    const row = rows[0];
+    return row ? {id: row.id, order: toOrder(row)} : null;
+  });
+}

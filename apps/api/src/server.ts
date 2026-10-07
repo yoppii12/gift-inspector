@@ -1,9 +1,11 @@
 import {AppError} from '@gift-inspector/shared';
 import pino from 'pino';
 
+import {createProvider} from './ai/providers';
 import {buildApp, LOGGER_OPTIONS} from './app';
 import {ConfigError, describeConfig, loadConfig} from './config';
 import {createPool} from './db/pool';
+import {startSweeper} from './inspection/sweeper';
 import {reportError} from './lib/errors';
 import {createNotifier} from './lib/notifier';
 
@@ -29,7 +31,8 @@ async function main(): Promise<void> {
     logger,
   });
   const db = createPool(config);
-  const deps = {config, db, notifier};
+  const provider = createProvider(config);
+  const deps = {config, db, notifier, provider};
   const app = buildApp(deps, {loggerInstance: logger});
 
   // 握りつぶされた Promise・想定外の例外を見逃さない。記録・通知したうえで終了し、systemd に再起動させる
@@ -42,8 +45,10 @@ async function main(): Promise<void> {
   process.on('unhandledRejection', fatal('unhandledRejection'));
   process.on('uncaughtException', fatal('uncaughtException'));
 
+  let stopSweeper = () => {};
   const shutdown = (signal: string) => {
     app.log.info({signal}, '停止します');
+    stopSweeper();
     app
       .close()
       .then(() => db.end())
@@ -61,6 +66,7 @@ async function main(): Promise<void> {
 
   await app.listen({host: config.API_HOST, port: config.API_PORT});
   app.log.info({config: describeConfig(config)}, '起動しました');
+  stopSweeper = startSweeper(db, notifier, app.log);
 }
 
 main().catch((err: unknown) => {
