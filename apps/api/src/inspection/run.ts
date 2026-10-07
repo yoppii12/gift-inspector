@@ -33,9 +33,11 @@ import {
 import {findOrderWithId} from '../db/orders';
 import type {Db} from '../db/pool';
 import {assertValidExpected, type Expected, judge, type Judgement} from '../judge/judge';
-import {inspectImage, saveImage} from '../storage/images';
+import type {Notifier} from '../lib/notifier';
+import {inspectImage, saveImage, sha256} from '../storage/images';
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+/** クライアントは crypto.randomUUID()（v4）で発行する */
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export interface InspectInput {
   inspectionId: string;
@@ -50,6 +52,8 @@ export interface InspectDeps {
   db: Db;
   provider: AiProvider;
   logger: FastifyBaseLogger;
+  /** 総合 ERROR の検品を通知する（docs/error-handling.md 0章-4・5.2） */
+  notifier: Notifier;
   now?: () => number;
   guardDeps?: GuardDeps;
 }
@@ -74,10 +78,11 @@ export async function runInspection(
   const startedAt = now();
   const deadline = startedAt + TIMEOUTS_MS.inspectionTotal;
   const {inspectionId} = input;
+  const imageHash = sha256(input.image);
 
-  // --- 2. 冪等性（同じ ID の再送）。画像の検査より先に見る（再送は保存済みの結果を返すだけ）
+  // --- 2. 冪等性（同じ ID の再送）。保存済みの結果を返すのは、同じ画像・同じオーダーのときだけ
   const existing = await findInspection(deps.db, inspectionId);
-  if (existing) return replay(existing);
+  if (existing) return replay(existing, input.orderCode, imageHash);
 
   // --- 1. 入力検証
   if (!ORDER_CODE_PATTERN.test(input.orderCode)) {
@@ -128,7 +133,7 @@ export async function runInspection(
   if (!inserted) {
     // 並行した再送が先に INSERT した
     const other = await findInspection(deps.db, inspectionId);
-    if (other) return replay(other);
+    if (other) return replay(other, input.orderCode, imageHash);
     throw new AppError('INSPECTION_IN_PROGRESS');
   }
 
@@ -173,6 +178,7 @@ export async function runInspection(
         tokensIn: sum(attempts.map(a => a.tokensIn)),
         tokensOut: sum(attempts.map(a => a.tokensOut)),
         durationMs: now() - startedAt,
+        errorDetail: judgement.overall === 'ERROR' ? (lastDetail(attempts) ?? null) : null,
         detail: result ? ({result} satisfies StoredDetail) : null,
       });
     } catch (err: unknown) {
@@ -185,6 +191,17 @@ export async function runInspection(
     }
 
     if (judgement.overall === 'ERROR' || !result) {
+      // 判定が行われなかった検品は、分類（再試行で直るものも含む）に関係なく通知する
+      deps.notifier.notify({
+        key: `inspection:ERROR:${judgement.errorCode ?? 'SYS_UNEXPECTED'}`,
+        title: `検品が ERROR で終わりました（${judgement.errorCode ?? 'SYS_UNEXPECTED'}）`,
+        fields: {
+          inspectionId,
+          orderCode: input.orderCode,
+          attempts: attempts.length,
+          detail: lastDetail(attempts),
+        },
+      });
       throw new AppError(judgement.errorCode ?? 'SYS_UNEXPECTED', {detail: lastDetail(attempts)});
     }
     return {...result, completedAt: new Date(now()).toISOString(), replayed: false};
@@ -288,8 +305,19 @@ function toResult(
   };
 }
 
-/** 同じ inspection_id の再送。保存済みの結果を返す（AI は呼ばない） */
-function replay(stored: StoredInspection): InspectionResult {
+/**
+ * 同じ inspection_id の再送。保存済みの結果を返す（AI は呼ばない）。
+ * 別の画像・別のオーダーで同じ ID が使われた場合は、判定していない画像に結果を返さないよう拒否する。
+ */
+function replay(stored: StoredInspection, orderCode: string, imageHash: string): InspectionResult {
+  if (
+    stored.orderCode !== orderCode ||
+    (stored.imageSha256 !== null && stored.imageSha256 !== imageHash)
+  ) {
+    throw new AppError('VALIDATION_FAILED', {
+      detail: '同じ inspection_id で別の画像またはオーダーが送られた',
+    });
+  }
   if (stored.status === 'PENDING') throw new AppError('INSPECTION_IN_PROGRESS');
   if (stored.overall === 'ERROR' || stored.overall === null) {
     const code: ErrorCode = isErrorCode(stored.errorCode) ? stored.errorCode : 'SYS_UNEXPECTED';

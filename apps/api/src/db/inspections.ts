@@ -42,6 +42,8 @@ export interface StoredInspection {
   overall: 'OK' | 'NG' | 'UNREADABLE' | 'ERROR' | null;
   errorCode: string | null;
   orderCode: string | null;
+  /** 再送時に同じ画像かどうかを確かめるため */
+  imageSha256: string | null;
   createdAt: Date;
   completedAt: Date | null;
   /** 完了時に保存した、応答の再構成に必要な情報 */
@@ -55,6 +57,7 @@ interface StoredRow extends RowDataPacket {
   overall: StoredInspection['overall'];
   error_code: string | null;
   order_code: string | null;
+  image_sha256: string | null;
   created_at: Date;
   completed_at: Date | null;
   judge_detail: unknown;
@@ -66,7 +69,7 @@ export async function findInspection(
 ): Promise<StoredInspection | null> {
   return withDb(async () => {
     const [rows] = await db.query<StoredRow[]>(
-      `SELECT i.id, i.inspection_id, i.status, i.overall, i.error_code, o.order_code,
+      `SELECT i.id, i.inspection_id, i.status, i.overall, i.error_code, o.order_code, i.image_sha256,
               i.created_at, i.completed_at, i.judge_detail
          FROM inspections i LEFT JOIN demo_orders o ON o.id = i.order_id
         WHERE i.inspection_id = ?`,
@@ -81,6 +84,7 @@ export async function findInspection(
       overall: r.overall,
       errorCode: r.error_code,
       orderCode: r.order_code,
+      imageSha256: r.image_sha256,
       createdAt: r.created_at,
       completedAt: r.completed_at,
       judgeDetail: r.judge_detail,
@@ -145,6 +149,8 @@ export interface Completion {
   tokensIn: number | null;
   tokensOut: number | null;
   durationMs: number;
+  /** 判定が ERROR のときの詳細（最後の試行の内容など） */
+  errorDetail: string | null;
   /** 応答の再構成用（judge_detail に保存） */
   detail: unknown;
 }
@@ -170,7 +176,7 @@ export async function completeInspection(
   return withDb(async () => {
     const [res] = await db.query<ResultSetHeader>(
       `UPDATE inspections SET
-          status = 'DONE', overall = ?, error_code = ?, unreadable_reason = ?,
+          status = 'DONE', overall = ?, error_code = ?, error_detail = ?, unreadable_reason = ?,
           ai_attempt_count = ?, ai_attempts = CAST(? AS JSON), ai_raw_response = CAST(? AS JSON),
           tokens_in = ?, tokens_out = ?,
           read_omotegaki = ?, read_atena = ?, read_card_text = ?, read_noshi_type = ?,
@@ -183,6 +189,7 @@ export async function completeInspection(
       [
         j.overall,
         j.errorCode,
+        c.errorDetail?.slice(0, 1000) ?? null,
         j.unreadableReason,
         c.attempts.length,
         JSON.stringify(c.attempts),

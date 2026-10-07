@@ -61,7 +61,13 @@ export const inspectionRoutes: FastifyPluginAsync<AppDeps> = async (app, deps) =
           requestId: request.id,
           userAgent: request.headers['user-agent'] ?? null,
         },
-        {config: deps.config, db: deps.db, provider: deps.provider, logger: request.log}
+        {
+          config: deps.config,
+          db: deps.db,
+          provider: deps.provider,
+          logger: request.log,
+          notifier: deps.notifier,
+        }
       );
       request.log.info(
         {inspectionId, overall: result.overall, replayed: result.replayed},

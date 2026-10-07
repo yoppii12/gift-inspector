@@ -36,7 +36,10 @@ export interface InspectionItem {
   read: string | null;
 }
 
-/** multipart のフィールド名 */
+/**
+ * multipart のフィールド名。クライアントは inspection_id → order_code → image の順に append すること
+ * （画像の受信中にエラーになっても、エラー応答に検品 ID を載せられるように）。
+ */
 export const INSPECTION_FIELDS = {
   inspectionId: 'inspection_id',
   orderCode: 'order_code',
