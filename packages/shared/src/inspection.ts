@@ -1,4 +1,11 @@
-import type {ItemKey, ItemReason, ItemResult, RefWarning, UnreadableReason} from './status';
+import type {
+  ItemKey,
+  ItemReason,
+  ItemResult,
+  MizuhikiType,
+  RefWarning,
+  UnreadableReason,
+} from './status';
 
 /**
  * POST /api/inspections の応答（判定が行われたとき。HTTP 200）。
@@ -45,3 +52,23 @@ export const INSPECTION_FIELDS = {
   orderCode: 'order_code',
   image: 'image',
 } as const;
+
+/** GET /api/orders・/api/orders/:code が返すオーダー（正解情報。画面に表示する） */
+export interface OrderView {
+  orderCode: string;
+  omotegaki: string | null;
+  atena: string | null;
+  cardText: string | null;
+  noshiType: MizuhikiType | null;
+  noshiRequired: boolean;
+  cardRequired: boolean;
+}
+
+export const REF_WARNING_LABELS: Record<RefWarning, string> = {
+  NOSHI_MISSING: 'のしが写っていません',
+  NOSHI_UNEXPECTED: 'のし不要のオーダーに、のしが写っています',
+  CARD_MISSING: 'メッセージカードが写っていません',
+  CARD_UNEXPECTED: 'カード不要のオーダーに、メッセージカードが写っています',
+  MIZUHIKI_MISMATCH: '水引の種類が登録と異なります',
+  MIZUHIKI_UNKNOWN: '水引の種類を判別できませんでした',
+};
