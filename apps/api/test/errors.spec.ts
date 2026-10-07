@@ -176,7 +176,7 @@ describe('設定の検証', () => {
   it('AI プロバイダを指定したらモデル名とキーが必須', () => {
     expect(() =>
       loadConfig({DB_USER: 'u', DB_NAME: 'n', IMAGE_DIR: '/tmp', AI_PROVIDER: 'anthropic'})
-    ).toThrow(/AI_MODEL.*AI_API_KEY|AI_API_KEY.*AI_MODEL/);
+    ).toThrow(/AI_MODEL.*ANTHROPIC_API_KEY|ANTHROPIC_API_KEY.*AI_MODEL/);
   });
 
   it('エラーメッセージに値そのものを含めない', () => {
