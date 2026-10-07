@@ -5,6 +5,7 @@ import {ClientError} from '../src/services/api';
 import {
   findResultProblem,
   getOrder,
+  isDevModeRequested,
   newInspectionId,
   postInspection,
 } from '../src/services/inspection';
@@ -15,6 +16,7 @@ function result(overrides: Partial<InspectionResult> = {}): InspectionResult {
   return {
     inspectionId: ID,
     orderCode: 'GIFT-DEMO-001',
+    mode: 'order',
     overall: 'OK',
     ngReason: null,
     unreadableReason: null,
@@ -192,5 +194,58 @@ describe('findResultProblem（OK でないものを OK と表示しない）', (
       code: 'RESPONSE_INVALID',
       inspectionId: ID,
     });
+  });
+});
+
+describe('開発用の手入力モード', () => {
+  const manual = {
+    orderCode: 'MANUAL',
+    omotegaki: '御祝',
+    atena: '佐藤 花子',
+    cardText: null,
+    noshiType: '蝶結び' as const,
+    noshiRequired: true,
+    cardRequired: false,
+  };
+
+  it('正解の項目を image より前に入れて送る', async () => {
+    let sent: FormData | null = null;
+    const fetchImpl = vi.fn((_url: string, init: RequestInit) => {
+      sent = init.body as FormData;
+      return Promise.resolve(json(result({orderCode: 'MANUAL', mode: 'manual'})));
+    }) as unknown as typeof fetch;
+    await postInspection(ID, 'MANUAL', new Blob(['x']), {fetchImpl, manual});
+    const form = sent as unknown as FormData;
+    expect([...form.keys()]).toEqual([
+      'inspection_id',
+      'order_code',
+      'expected_omotegaki',
+      'expected_atena',
+      'expected_card_text',
+      'expected_noshi_type',
+      'noshi_required',
+      'card_required',
+      'image',
+    ]);
+    expect(form.get('noshi_required')).toBe('true');
+    expect(form.get('card_required')).toBe('false');
+  });
+
+  it('手入力で送ったのに通常モードの応答が返れば RESPONSE_INVALID', async () => {
+    const fetchImpl = vi.fn(() =>
+      Promise.resolve(json(result({orderCode: 'MANUAL', mode: 'order'})))
+    ) as unknown as typeof fetch;
+    await expect(
+      postInspection(ID, 'MANUAL', new Blob(['x']), {fetchImpl, manual})
+    ).rejects.toMatchObject({
+      code: 'RESPONSE_INVALID',
+    });
+  });
+
+  it('?dev=1 のときだけ入口を出す', () => {
+    expect(isDevModeRequested('?dev=1')).toBe(true);
+    expect(isDevModeRequested('')).toBe(false);
+    expect(isDevModeRequested('?dev=0')).toBe(false);
+    expect(isDevModeRequested('?check=1')).toBe(false);
   });
 });

@@ -5,6 +5,7 @@ import {AppHeader, Page} from './components/Layout';
 import {ConnectionCheck} from './pages/ConnectionCheck';
 import {Inspect} from './pages/Inspect';
 import {OrderSelect} from './pages/OrderSelect';
+import {isManualOrder} from './services/inspection';
 
 type Screen = {kind: 'select'; order: OrderView | null} | {kind: 'inspect'; order: OrderView};
 
@@ -29,7 +30,10 @@ export function App() {
         // オーダーごとに状態を作り直す
         key={screen.order.orderCode}
         order={screen.order}
-        onBack={() => setScreen({kind: 'select', order: screen.order})}
+        // 手入力モードから戻るときは、オーダー確認ではなく選択画面に戻す（MANUAL をオーダーとして表示しない）
+        onBack={() =>
+          setScreen({kind: 'select', order: isManualOrder(screen.order) ? null : screen.order})
+        }
         onNextOrder={() => setScreen({kind: 'select', order: null})}
       />
     );

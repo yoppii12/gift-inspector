@@ -11,7 +11,9 @@ import {type Db, withDb} from './pool';
 export interface PendingInspection {
   inspectionId: string;
   requestId: string;
-  orderId: number;
+  /** 開発用の手入力モードでは null */
+  orderId: number | null;
+  mode: 'order' | 'manual';
   expected: {
     omotegaki: string | null;
     atena: string | null;
@@ -42,6 +44,16 @@ export interface StoredInspection {
   overall: 'OK' | 'NG' | 'UNREADABLE' | 'ERROR' | null;
   errorCode: string | null;
   orderCode: string | null;
+  mode: 'order' | 'manual';
+  /** 判定時点の正解（手入力モードの再送で、同じ正解かどうかを確かめるため） */
+  expected: {
+    omotegaki: string | null;
+    atena: string | null;
+    cardText: string | null;
+    noshiType: string | null;
+    noshiRequired: boolean;
+    cardRequired: boolean;
+  };
   /** 再送時に同じ画像かどうかを確かめるため */
   imageSha256: string | null;
   createdAt: Date;
@@ -57,6 +69,13 @@ interface StoredRow extends RowDataPacket {
   overall: StoredInspection['overall'];
   error_code: string | null;
   order_code: string | null;
+  mode: 'order' | 'manual';
+  expected_omotegaki: string | null;
+  expected_atena: string | null;
+  expected_card_text: string | null;
+  expected_noshi_type: string | null;
+  expected_noshi_required: number;
+  expected_card_required: number;
   image_sha256: string | null;
   created_at: Date;
   completed_at: Date | null;
@@ -69,7 +88,9 @@ export async function findInspection(
 ): Promise<StoredInspection | null> {
   return withDb(async () => {
     const [rows] = await db.query<StoredRow[]>(
-      `SELECT i.id, i.inspection_id, i.status, i.overall, i.error_code, o.order_code, i.image_sha256,
+      `SELECT i.id, i.inspection_id, i.status, i.overall, i.error_code, o.order_code, i.mode, i.image_sha256,
+              i.expected_omotegaki, i.expected_atena, i.expected_card_text, i.expected_noshi_type,
+              i.expected_noshi_required, i.expected_card_required,
               i.created_at, i.completed_at, i.judge_detail
          FROM inspections i LEFT JOIN demo_orders o ON o.id = i.order_id
         WHERE i.inspection_id = ?`,
@@ -84,6 +105,15 @@ export async function findInspection(
       overall: r.overall,
       errorCode: r.error_code,
       orderCode: r.order_code,
+      mode: r.mode,
+      expected: {
+        omotegaki: r.expected_omotegaki,
+        atena: r.expected_atena,
+        cardText: r.expected_card_text,
+        noshiType: r.expected_noshi_type,
+        noshiRequired: r.expected_noshi_required === 1,
+        cardRequired: r.expected_card_required === 1,
+      },
       imageSha256: r.image_sha256,
       createdAt: r.created_at,
       completedAt: r.completed_at,
@@ -103,11 +133,12 @@ export async function insertPending(db: Db, p: PendingInspection): Promise<boole
            expected_noshi_required, expected_card_required,
            image_path, image_sha256, image_bytes, image_mime, image_width, image_height,
            ai_provider, ai_model, prompt_version, schema_version, app_version, client_ua)
-         VALUES (?, ?, ?, 'order', 'PENDING', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, 'PENDING', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           p.inspectionId,
           p.requestId,
           p.orderId,
+          p.mode,
           p.expected.omotegaki,
           p.expected.atena,
           p.expected.cardText,

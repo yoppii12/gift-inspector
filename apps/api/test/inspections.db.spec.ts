@@ -16,7 +16,7 @@ import {buildApp} from '../src/app';
 import {loadConfig} from '../src/config';
 import type {Db} from '../src/db/pool';
 import {sweepAbandoned} from '../src/inspection/sweeper';
-import {fakeHeic, fakeJpeg, inspectionForm, tempDir} from './helpers';
+import {fakeHeic, fakeJpeg, inspectionForm, manualForm, tempDir} from './helpers';
 
 const enabled = Boolean(process.env.TEST_DB_HOST);
 if (!enabled) {
@@ -46,13 +46,17 @@ describe.skipIf(!enabled)('POST /api/inspections（MySQL）', () => {
     await pool.end();
   });
 
-  function setup(steps: MockStep[] = [valid], opts: {db?: Db; imageDir?: string} = {}) {
+  function setup(
+    steps: MockStep[] = [valid],
+    opts: {db?: Db; imageDir?: string; devMode?: boolean} = {}
+  ) {
     const config = loadConfig({
       NODE_ENV: 'test',
       DB_USER: 'u',
       DB_NAME: 'n',
       IMAGE_DIR: opts.imageDir ?? tempDir(),
       APP_VERSION: 'test',
+      DEV_MODE_ENABLED: opts.devMode ? 'true' : 'false',
     });
     const provider = new MockProvider(steps, 0);
     const app = buildApp(
@@ -320,6 +324,202 @@ describe.skipIf(!enabled)('POST /api/inspections（MySQL）', () => {
     expect(res.statusCode).toBe(409);
     expect(provider.requests).toHaveLength(0);
     await pool.query('DELETE FROM inspections WHERE inspection_id = ?', [id]);
+  });
+
+  describe('開発用の手入力モード（DEV_MODE_ENABLED=true）', () => {
+    // モック AI は GIFT-DEMO-001 の印刷物どおりに読む
+    const matching = {
+      omotegaki: '御祝',
+      atena: '佐藤 花子',
+      cardText: MOCK_READING.card_text ?? '',
+      noshiType: '蝶結び',
+    };
+
+    it('手入力の正解で、通常と同じ規則で判定し、mode=manual・オーダーなしで記録する', async () => {
+      const {app, provider} = setup([valid], {devMode: true});
+      const id = randomUUID();
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/inspections',
+        ...manualForm(id, fakeJpeg(), matching),
+      });
+      expect(res.statusCode).toBe(200);
+      expect(JSON.parse(res.payload)).toMatchObject({
+        mode: 'manual',
+        orderCode: 'MANUAL',
+        overall: 'OK',
+      });
+      expect(await row(id)).toMatchObject({
+        mode: 'manual',
+        order_id: null,
+        expected_omotegaki: '御祝',
+        overall: 'OK',
+      });
+      // AI への依頼に手入力の正解は含まれない（依頼は画像と ID だけ）
+      expect(Object.keys(provider.requests[0] ?? {}).sort()).toEqual([
+        'image',
+        'inspectionId',
+        'mimeType',
+        'signal',
+        'timeoutMs',
+      ]);
+    });
+
+    it('手入力の正解と違えば NG', async () => {
+      const {app} = setup([valid], {devMode: true});
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/inspections',
+        ...manualForm(randomUUID(), fakeJpeg(), {...matching, omotegaki: '御礼'}),
+      });
+      const body = JSON.parse(res.payload) as InspectionResult;
+      expect(body.overall).toBe('NG');
+      expect(body.items.find(i => i.key === 'omotegaki')).toMatchObject({
+        result: 'NG',
+        expected: '御礼',
+        read: '御祝',
+      });
+    });
+
+    it('必須の正解が空なら CONFIG_INVALID_EXPECTED（422）で、AI を呼ばない', async () => {
+      const {app, provider} = setup([valid], {devMode: true});
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/inspections',
+        ...manualForm(randomUUID(), fakeJpeg(), {...matching, omotegaki: '  '}),
+      });
+      expect(res.statusCode).toBe(422);
+      expect((JSON.parse(res.payload) as ErrorResponseBody).error.code).toBe(
+        'CONFIG_INVALID_EXPECTED'
+      );
+      expect(provider.requests).toHaveLength(0);
+    });
+
+    it('同じ ID で正解を変えて再送しても、保存済みの結果を返さない', async () => {
+      const {app, provider} = setup([valid], {devMode: true});
+      const id = randomUUID();
+      await app.inject({
+        method: 'POST',
+        url: '/api/inspections',
+        ...manualForm(id, fakeJpeg(), matching),
+      });
+      const same = await app.inject({
+        method: 'POST',
+        url: '/api/inspections',
+        ...manualForm(id, fakeJpeg(), matching),
+      });
+      expect(JSON.parse(same.payload)).toMatchObject({replayed: true, overall: 'OK'});
+      const changed = await app.inject({
+        method: 'POST',
+        url: '/api/inspections',
+        ...manualForm(id, fakeJpeg(), {...matching, atena: '別人'}),
+      });
+      expect(changed.statusCode).toBe(400);
+      expect(provider.requests).toHaveLength(1);
+    });
+
+    it.each([
+      ['水引が選択肢にない', {noshiType: 'あわじ結び'}],
+      ['必須の指定が true / false でない', {noshiRequired: 'yes'}],
+      ['表書きが 65 文字', {omotegaki: 'あ'.repeat(65)}],
+      ['カード文面が 1001 文字', {cardText: 'あ'.repeat(1001)}],
+      ['カード文面が送信の上限（4096 バイト）を超える', {cardText: '🎁'.repeat(1100)}],
+    ])('不正な手入力（%s）は VALIDATION_FAILED で、AI を呼ばない', async (_l, patch) => {
+      const {app, provider} = setup([valid], {devMode: true});
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/inspections',
+        ...manualForm(randomUUID(), fakeJpeg(), {...matching, ...patch}),
+      });
+      expect(res.statusCode).toBe(400);
+      expect((JSON.parse(res.payload) as ErrorResponseBody).error.code).toBe('VALIDATION_FAILED');
+      expect(provider.requests).toHaveLength(0);
+    });
+
+    it('カード文面はちょうど 1000 文字まで受け付ける', async () => {
+      const {app} = setup([valid], {devMode: true});
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/inspections',
+        ...manualForm(randomUUID(), fakeJpeg(), {...matching, cardText: 'あ'.repeat(1000)}),
+      });
+      expect(res.statusCode).toBe(200);
+    });
+
+    it('のしなし・カードなしの項目に値があっても、正解として記録しない（null にする）', async () => {
+      const {app} = setup([valid], {devMode: true});
+      const id = randomUUID();
+      await app.inject({
+        method: 'POST',
+        url: '/api/inspections',
+        ...manualForm(id, fakeJpeg(), {...matching, noshiRequired: 'false'}),
+      });
+      expect(await row(id)).toMatchObject({
+        expected_noshi_required: 0,
+        expected_omotegaki: null,
+        expected_atena: null,
+        expected_noshi_type: null,
+        result_omotegaki: 'SKIP',
+      });
+    });
+
+    it('同じ ID・同じ正解でも、別の画像なら保存済みの結果を返さない', async () => {
+      const {app, provider} = setup([valid], {devMode: true});
+      const id = randomUUID();
+      await app.inject({
+        method: 'POST',
+        url: '/api/inspections',
+        ...manualForm(id, fakeJpeg(), matching),
+      });
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/inspections',
+        ...manualForm(id, fakeJpeg(300), matching),
+      });
+      expect(res.statusCode).toBe(400);
+      expect(provider.requests).toHaveLength(1);
+    });
+
+    it('通常のオーダーに正解の項目を混ぜても、オーダーの登録内容で判定する（正解を上書きできない）', async () => {
+      const {app} = setup([valid], {devMode: true});
+      const id = randomUUID();
+      const form = manualForm(id, fakeJpeg(), {...matching, omotegaki: '偽の正解'});
+      const payload = form.payload.toString('latin1').replace('MANUAL', 'GIFT-DEMO-003');
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/inspections',
+        payload: Buffer.from(payload, 'latin1'),
+        headers: form.headers,
+      });
+      expect(JSON.parse(res.payload)).toMatchObject({mode: 'order', overall: 'NG'});
+      expect(await row(id)).toMatchObject({mode: 'order', expected_omotegaki: '御礼'});
+    });
+
+    it('order_code が小文字の manual なら手入力にならず ORDER_NOT_FOUND', async () => {
+      const {app, provider} = setup([valid], {devMode: true});
+      const form = manualForm(randomUUID(), fakeJpeg(), matching);
+      const payload = form.payload.toString('latin1').replace('MANUAL', 'manual');
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/inspections',
+        payload: Buffer.from(payload, 'latin1'),
+        headers: form.headers,
+      });
+      expect(res.statusCode).toBe(404);
+      expect(provider.requests).toHaveLength(0);
+    });
+
+    it('オーダーで判定した ID を手入力で再送しても、保存済みの結果を返さない', async () => {
+      const {app} = setup([valid], {devMode: true});
+      const id = randomUUID();
+      await post(app, id, 'GIFT-DEMO-001');
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/inspections',
+        ...manualForm(id, fakeJpeg(), matching),
+      });
+      expect(res.statusCode).toBe(400);
+    });
   });
 
   it('どの検品でも、完了した行は必ず総合結果を持ち、ERROR は必ずエラーコードを持つ', async () => {

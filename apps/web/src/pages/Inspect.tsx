@@ -7,7 +7,7 @@ import {ErrorPanel} from '../components/ErrorPanel';
 import {AppHeader, Card, Page, Stepper} from '../components/Layout';
 import {ResultView} from '../components/ResultView';
 import {ClientError, toClientError} from '../services/api';
-import {newInspectionId, postInspection} from '../services/inspection';
+import {isManualOrder, newInspectionId, postInspection} from '../services/inspection';
 import {prepareImage} from '../services/media';
 import {reportClientError} from '../services/report';
 import {tokens} from '../theme';
@@ -74,6 +74,7 @@ export function Inspect({
     try {
       const result = await postInspection(inspectionId, order.orderCode, blob, {
         signal: controller.signal,
+        manual: isManualOrder(order) ? order : null,
       });
       if (!disposedRef.current) setState({kind: 'result', result});
     } catch (err: unknown) {
@@ -144,7 +145,7 @@ export function Inspect({
 
   return (
     <>
-      <AppHeader title={title} onBack={busy ? undefined : onBack} />
+      <AppHeader title={title} onBack={busy ? undefined : onBack} devMode={isManualOrder(order)} />
       <input
         ref={inputRef}
         type="file"
@@ -179,7 +180,7 @@ export function Inspect({
       >
         <Stepper current={judged ? 2 : 1} />
         <Typography variant="caption" component="p" sx={{mb: 1}}>
-          オーダーNo {order.orderCode}
+          {isManualOrder(order) ? '開発モード（正解を手入力）' : `オーダーNo ${order.orderCode}`}
         </Typography>
 
         {state.kind === 'ready' && <CaptureGuide />}

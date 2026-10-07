@@ -12,7 +12,7 @@ import {buildApp} from '../src/app';
 import {loadConfig} from '../src/config';
 import type {Db} from '../src/db/pool';
 import {inspectImage, saveImage} from '../src/storage/images';
-import {fakeHeic, fakeJpeg, inspectionForm, multipart, tempDir} from './helpers';
+import {fakeHeic, fakeJpeg, inspectionForm, manualForm, multipart, tempDir} from './helpers';
 
 describe('画像の検査', () => {
   it('JPEG を受け付け、寸法を読む', () => {
@@ -163,6 +163,25 @@ describe('POST /api/inspections（DB なし）', () => {
     expect(error(res.payload)).toMatchObject({code: 'UPLOAD_TOO_LARGE', inspectionId: id});
     expect(provider.requests).toHaveLength(0);
   });
+
+  it.each([
+    ['正しい手入力', {omotegaki: '御祝', atena: '佐藤 花子', cardText: 'x', noshiType: '蝶結び'}],
+    ['不正な手入力', {noshiType: 'あわじ結び', noshiRequired: 'yes'}],
+  ])(
+    '開発モードが無効なら、手入力（%s）は DEV_MODE_DISABLED（403）で、DB も AI も使わない',
+    async (_l, e) => {
+      const {app, provider} = setup();
+      const id = randomUUID();
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/inspections',
+        ...manualForm(id, fakeJpeg(), e),
+      });
+      expect(res.statusCode).toBe(403);
+      expect(error(res.payload)).toMatchObject({code: 'DEV_MODE_DISABLED', inspectionId: id});
+      expect(provider.requests).toHaveLength(0);
+    }
+  );
 
   it('DB に接続できなければ DB_UNAVAILABLE（503）で、OK を返さず、通知する', async () => {
     const {app, provider, notify} = setup();

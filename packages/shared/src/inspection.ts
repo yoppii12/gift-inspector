@@ -13,7 +13,10 @@ import type {
  */
 export interface InspectionResult {
   inspectionId: string;
+  /** 開発用の手入力モードでは MANUAL_ORDER_CODE */
   orderCode: string;
+  /** order = オーダーの登録内容で判定、manual = 開発用に正解を手入力して判定 */
+  mode: 'order' | 'manual';
   overall: 'OK' | 'NG' | 'UNREADABLE';
   /** overall=NG のうち、参考判定の警告だけが理由のとき 'REF_MISMATCH' */
   ngReason: 'ITEM' | 'REF_MISMATCH' | null;
@@ -51,7 +54,17 @@ export const INSPECTION_FIELDS = {
   inspectionId: 'inspection_id',
   orderCode: 'order_code',
   image: 'image',
+  // 以下は開発用の手入力モード（order_code = MANUAL_ORDER_CODE）のときだけ送る。image より前に入れる
+  expectedOmotegaki: 'expected_omotegaki',
+  expectedAtena: 'expected_atena',
+  expectedCardText: 'expected_card_text',
+  expectedNoshiType: 'expected_noshi_type',
+  noshiRequired: 'noshi_required',
+  cardRequired: 'card_required',
 } as const;
+
+/** 開発用の手入力モードで order_code に入れる値（オーダーの形式 GIFT-DEMO-NNN とは重ならない） */
+export const MANUAL_ORDER_CODE = 'MANUAL';
 
 /** GET /api/orders・/api/orders/:code が返すオーダー（正解情報。画面に表示する） */
 export interface OrderView {

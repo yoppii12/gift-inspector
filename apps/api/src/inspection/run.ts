@@ -14,6 +14,7 @@ import {
   type InspectionResult,
   isErrorCode,
   ITEM_LABELS,
+  MANUAL_ORDER_CODE,
   ORDER_CODE_PATTERN,
   TIMEOUTS_MS,
 } from '@gift-inspector/shared';
@@ -42,6 +43,11 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0
 export interface InspectInput {
   inspectionId: string;
   orderCode: string;
+  /**
+   * 開発用の手入力モード（orderCode = MANUAL_ORDER_CODE）の正解。DEV_MODE_ENABLED=true のときだけ受け付ける。
+   * 判定は通常と同じ関数・規則で行い、AI には渡さない
+   */
+  manualExpected?: Expected | null;
   image: Buffer;
   requestId: string;
   userAgent: string | null;
@@ -80,25 +86,41 @@ export async function runInspection(
   const {inspectionId} = input;
   const imageHash = sha256(input.image);
 
-  // --- 2. 冪等性（同じ ID の再送）。保存済みの結果を返すのは、同じ画像・同じオーダーのときだけ
+  const manual = input.manualExpected ?? null;
+  // 開発モードが無効なら、手入力の依頼は何もせずに断る（再送の確認より先）
+  if (manual && !deps.config.DEV_MODE_ENABLED) {
+    throw new AppError('DEV_MODE_DISABLED', {detail: '手入力モードの依頼を受けた'});
+  }
+  const target: ReplayTarget = manual
+    ? {mode: 'manual', orderCode: MANUAL_ORDER_CODE, expected: manual}
+    : {mode: 'order', orderCode: input.orderCode};
+
+  // --- 2. 冪等性（同じ ID の再送）。保存済みの結果を返すのは、同じ画像・同じ判定対象のときだけ
   const existing = await findInspection(deps.db, inspectionId);
-  if (existing) return replay(existing, input.orderCode, imageHash);
+  if (existing) return replay(existing, target, imageHash);
 
   // --- 1. 入力検証
-  if (!ORDER_CODE_PATTERN.test(input.orderCode)) {
-    throw new AppError('ORDER_NOT_FOUND', {detail: 'コードの形式が不正'});
+  let orderId: number | null = null;
+  let expected: Expected;
+  if (manual) {
+    expected = manual;
+  } else {
+    if (!ORDER_CODE_PATTERN.test(input.orderCode)) {
+      throw new AppError('ORDER_NOT_FOUND', {detail: 'コードの形式が不正'});
+    }
+    const found = await findOrderWithId(deps.db, input.orderCode);
+    if (!found) throw new AppError('ORDER_NOT_FOUND', {detail: input.orderCode});
+    const {order} = found;
+    orderId = found.id;
+    expected = {
+      omotegaki: order.omotegaki,
+      atena: order.atena,
+      cardText: order.cardText,
+      noshiType: order.noshiType,
+      noshiRequired: order.noshiRequired,
+      cardRequired: order.cardRequired,
+    };
   }
-  const found = await findOrderWithId(deps.db, input.orderCode);
-  if (!found) throw new AppError('ORDER_NOT_FOUND', {detail: input.orderCode});
-  const {order} = found;
-  const expected: Expected = {
-    omotegaki: order.omotegaki,
-    atena: order.atena,
-    cardText: order.cardText,
-    noshiType: order.noshiType,
-    noshiRequired: order.noshiRequired,
-    cardRequired: order.cardRequired,
-  };
   // AI を呼ぶ前に正解データを検査する（不備なら CONFIG_INVALID_EXPECTED）
   assertValidExpected(expected);
 
@@ -118,7 +140,8 @@ export async function runInspection(
   const inserted = await insertPending(deps.db, {
     inspectionId,
     requestId: input.requestId,
-    orderId: found.id,
+    orderId,
+    mode: target.mode,
     expected,
     image: {path: saved.relativePath, sha256: saved.sha256, bytes: saved.bytes, ...image},
     ai: {
@@ -133,7 +156,7 @@ export async function runInspection(
   if (!inserted) {
     // 並行した再送が先に INSERT した
     const other = await findInspection(deps.db, inspectionId);
-    if (other) return replay(other, input.orderCode, imageHash);
+    if (other) return replay(other, target, imageHash);
     throw new AppError('INSPECTION_IN_PROGRESS');
   }
 
@@ -156,7 +179,7 @@ export async function runInspection(
     });
     const result = toResult(
       inspectionId,
-      input.orderCode,
+      target,
       judgement,
       read.status === 'ok' ? read.data : null,
       expected
@@ -274,7 +297,7 @@ async function closeQuietly(
 
 function toResult(
   inspectionId: string,
-  orderCode: string,
+  target: ReplayTarget,
   j: Judgement,
   read: {noshi_present: boolean; card_present: boolean; mizuhiki_type: string} | null,
   expected: Expected
@@ -290,7 +313,8 @@ function toResult(
   }));
   return {
     inspectionId,
-    orderCode,
+    orderCode: target.orderCode,
+    mode: target.mode,
     overall: j.overall,
     ngReason: j.ngReason,
     unreadableReason: j.unreadableReason,
@@ -305,17 +329,42 @@ function toResult(
   };
 }
 
+/** 判定の対象（オーダー、または手入力の正解） */
+type ReplayTarget =
+  | {mode: 'order'; orderCode: string}
+  | {mode: 'manual'; orderCode: typeof MANUAL_ORDER_CODE; expected: Expected};
+
+function sameTarget(stored: StoredInspection, target: ReplayTarget): boolean {
+  if (stored.mode !== target.mode) return false;
+  if (target.mode === 'order') return stored.orderCode === target.orderCode;
+  const a = stored.expected;
+  const b = target.expected;
+  return (
+    a.omotegaki === b.omotegaki &&
+    a.atena === b.atena &&
+    a.cardText === b.cardText &&
+    a.noshiType === b.noshiType &&
+    a.noshiRequired === b.noshiRequired &&
+    a.cardRequired === b.cardRequired
+  );
+}
+
 /**
  * 同じ inspection_id の再送。保存済みの結果を返す（AI は呼ばない）。
- * 別の画像・別のオーダーで同じ ID が使われた場合は、判定していない画像に結果を返さないよう拒否する。
+ * 別の画像・別の判定対象（オーダー・手入力の正解）で同じ ID が使われた場合は、
+ * 判定していない画像に結果を返さないよう拒否する。
  */
-function replay(stored: StoredInspection, orderCode: string, imageHash: string): InspectionResult {
+function replay(
+  stored: StoredInspection,
+  target: ReplayTarget,
+  imageHash: string
+): InspectionResult {
   if (
-    stored.orderCode !== orderCode ||
+    !sameTarget(stored, target) ||
     (stored.imageSha256 !== null && stored.imageSha256 !== imageHash)
   ) {
     throw new AppError('VALIDATION_FAILED', {
-      detail: '同じ inspection_id で別の画像またはオーダーが送られた',
+      detail: '同じ inspection_id で別の画像または判定対象（オーダー・手入力の正解）が送られた',
     });
   }
   if (stored.status === 'PENDING') throw new AppError('INSPECTION_IN_PROGRESS');
