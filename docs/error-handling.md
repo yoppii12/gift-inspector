@@ -58,12 +58,12 @@
 合成規則（`judge/judge.ts` の唯一の実装。上から順に評価する）:
 
 1. 判定前・判定中・保存時のいずれかでエラーが起きた → `ERROR`
-2. AI応答が2回ともスキーマ不適合 → `UNREADABLE`（項目はすべて `UNREADABLE`）
-3. `NG` の項目が1つ以上ある → `NG`
-4. `UNREADABLE` の項目が1つ以上ある → `UNREADABLE`
-5. `REF_MISMATCH_BLOCKS_OK=true` かつ参考判定の警告が1つ以上ある → `NG`（理由 `REF_MISMATCH`）
-6. `SKIP` 以外の項目が1つ以上あり、それらがすべて `OK` → `OK`
-7. 上記以外（全項目が `SKIP` など） → `ERROR` / `CONFIG_INVALID_EXPECTED`
+2. AI応答が2回ともスキーマ不適合 → `UNREADABLE`（必須の項目はすべて `UNREADABLE`、不要な項目は `SKIP`）
+3. `SKIP` 以外の項目が1つもない（判定する項目がない） → `ERROR` / `CONFIG_INVALID_EXPECTED`（品質の結果ではなく設定の不備なので、警告より優先する）
+4. `NG` の項目が1つ以上ある → `NG`
+5. `UNREADABLE` の項目が1つ以上ある → `UNREADABLE`
+6. `REF_MISMATCH_BLOCKS_OK=true` かつ参考判定の警告が1つ以上ある → `NG`（理由 `REF_MISMATCH`）
+7. 上記以外（`SKIP` 以外の項目がすべて `OK`） → `OK`
 
 項目状態の全組合せ（`OK/NG/UNREADABLE/SKIP` の3乗 = 64通り）× 参考警告の有無 × フラグの値について、総合結果を表としてテストで固定する（6章）。
 
