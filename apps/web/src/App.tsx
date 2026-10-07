@@ -1,39 +1,45 @@
-import {Box, Typography} from '@mui/material';
+import type {OrderView} from '@gift-inspector/shared';
+import {useState} from 'react';
 
+import {AppHeader, Page} from './components/Layout';
 import {ConnectionCheck} from './pages/ConnectionCheck';
-import {tokens} from './theme';
+import {Inspect} from './pages/Inspect';
+import {OrderSelect} from './pages/OrderSelect';
 
-/** 画面の外枠（アプリバー＋本文）。スマホ幅 390px 基準、タブレット以上は最大幅 480px で中央寄せ */
+type Screen = {kind: 'select'; order: OrderView | null} | {kind: 'inspect'; order: OrderView};
+
+/** 2画面（オーダー選択 → 撮影・判定結果）。`?check=1` で接続確認画面（開発・導通確認用） */
 export function App() {
+  const [screen, setScreen] = useState<Screen>({kind: 'select', order: null});
+
+  if (new URLSearchParams(location.search).has('check')) {
+    return (
+      <>
+        <AppHeader title="接続確認" />
+        <Page>
+          <ConnectionCheck />
+        </Page>
+      </>
+    );
+  }
+
+  if (screen.kind === 'inspect') {
+    return (
+      <Inspect
+        // オーダーごとに状態を作り直す
+        key={screen.order.orderCode}
+        order={screen.order}
+        onBack={() => setScreen({kind: 'select', order: screen.order})}
+        onNextOrder={() => setScreen({kind: 'select', order: null})}
+      />
+    );
+  }
+
   return (
-    <Box sx={{minHeight: '100dvh', bgcolor: tokens.color.base}}>
-      <Box
-        component="header"
-        sx={{
-          bgcolor: tokens.color.main,
-          color: tokens.color.base,
-          pt: 'env(safe-area-inset-top)',
-        }}
-      >
-        <Box sx={{maxWidth: tokens.maxWidth, mx: 'auto', px: `${tokens.space.page}px`, py: 2}}>
-          <Typography variant="h1" component="h1">
-            ギフト検品
-          </Typography>
-        </Box>
-      </Box>
-      <Box
-        component="main"
-        sx={{
-          maxWidth: tokens.maxWidth,
-          mx: 'auto',
-          px: `${tokens.space.page}px`,
-          py: 2,
-          pb: 'calc(16px + env(safe-area-inset-bottom))',
-        }}
-      >
-        {/* T4 でオーダー選択・撮影判定の2画面に置き換える。接続確認は ?check=1 で残す */}
-        <ConnectionCheck />
-      </Box>
-    </Box>
+    <OrderSelect
+      key={screen.order?.orderCode ?? 'none'}
+      initialOrder={screen.order}
+      onStart={order => setScreen({kind: 'inspect', order})}
+    />
   );
 }

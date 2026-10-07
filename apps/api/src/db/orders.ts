@@ -1,17 +1,10 @@
-import type {MizuhikiType} from '@gift-inspector/shared';
+import type {MizuhikiType, OrderView} from '@gift-inspector/shared';
 import type {RowDataPacket} from 'mysql2/promise';
 
 import {type Db, withDb} from './pool';
 
-export interface DemoOrder {
-  orderCode: string;
-  omotegaki: string | null;
-  atena: string | null;
-  cardText: string | null;
-  noshiType: MizuhikiType | null;
-  noshiRequired: boolean;
-  cardRequired: boolean;
-}
+/** 画面に返す形（OrderView）と同じ */
+export type DemoOrder = OrderView;
 
 interface OrderRow extends RowDataPacket {
   order_code: string;
