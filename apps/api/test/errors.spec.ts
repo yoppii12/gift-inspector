@@ -7,7 +7,7 @@ import {describe, expect, it, vi} from 'vitest';
 
 import {MOCK_READING, MockProvider} from '../src/ai/providers/mock';
 import {buildApp} from '../src/app';
-import {loadConfig} from '../src/config';
+import {describeConfig, loadConfig} from '../src/config';
 import type {Db} from '../src/db/pool';
 import {toAppError} from '../src/lib/errors';
 import type {NotifyEvent} from '../src/lib/notifier';
@@ -176,7 +176,20 @@ describe('設定の検証', () => {
   it('AI プロバイダを指定したらモデル名とキーが必須', () => {
     expect(() =>
       loadConfig({DB_USER: 'u', DB_NAME: 'n', IMAGE_DIR: '/tmp', AI_PROVIDER: 'anthropic'})
-    ).toThrow(/AI_MODEL.*AI_API_KEY|AI_API_KEY.*AI_MODEL/);
+    ).toThrow(/AI_MODEL.*ANTHROPIC_API_KEY|ANTHROPIC_API_KEY.*AI_MODEL/);
+  });
+
+  it('google は GEMINI_API_KEY だけが必須で、起動情報にキーを出さない', () => {
+    const base = {
+      DB_USER: 'u',
+      DB_NAME: 'n',
+      IMAGE_DIR: '/tmp',
+      AI_PROVIDER: 'google',
+      AI_MODEL: 'gemini-3.5-flash',
+    };
+    expect(() => loadConfig(base)).toThrow(/GEMINI_API_KEY/);
+    const config = loadConfig({...base, GEMINI_API_KEY: 'AIza-secret'});
+    expect(JSON.stringify(describeConfig(config))).not.toContain('AIza-secret');
   });
 
   it('エラーメッセージに値そのものを含めない', () => {

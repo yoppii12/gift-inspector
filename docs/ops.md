@@ -24,6 +24,45 @@ sudo mysql --defaults-extra-file=/etc/gift-inspector/mysql-client.cnf gift_inspe
 
 ログの `level`: 30=情報、40=警告（利用者の操作で解消するもの）、50=エラー（開発者の対応が必要）、60=致命的（プロセス終了）。
 
+## AI の API キーを設定する
+
+キーは**チャット・Issue・Slack・コマンドライン引数に書かない**。（VPS のログインシェルが bash であることが前提。`read -s` を使うため）担当者が自分のターミナルで次を実行し、表示された入力欄に貼り付ける（画面にも履歴にも残らない）。最後に `設定済みの行数: 1` と出れば完了。
+
+```bash
+# NAME=ANTHROPIC_API_KEY（キーは sk-ant- で始まる）または NAME=GEMINI_API_KEY（AIza / AQ. で始まる）
+ssh -t gift-vps '
+NAME=GEMINI_API_KEY
+read -rsp "$NAME を貼り付けて Enter（表示されません）: " K; echo
+case "$NAME:$K" in ANTHROPIC_API_KEY:sk-ant-*|GEMINI_API_KEY:AIza*|GEMINI_API_KEY:AQ.*) ;; *) echo "形式が違います。中止します"; exit 1;; esac
+printf "%s" "$K" | sudo env NAME=$NAME python3 -c "
+import os, sys, re
+p = \"/etc/gift-inspector/api.env\"; name = os.environ[\"NAME\"]
+line = name + \"=\" + sys.stdin.read().strip(); s = open(p).read()
+s = re.sub(\"^\" + name + \"=.*\", lambda m: line, s, flags=re.M) if re.search(\"^\" + name + \"=\", s, re.M) else s.rstrip(chr(10)) + chr(10) + line + chr(10)
+open(p, \"w\").write(s)"
+unset K
+echo "設定済みの行数: $(sudo grep -c "^$NAME=." /etc/gift-inspector/api.env)"
+'
+```
+
+使うプロバイダを切り替えるときは、`AI_PROVIDER` と `AI_MODEL` を書き換えて `sudo systemctl restart gift-inspector-api`。キーの行は上書きしない（両方のプロバイダのキーを残しておく）。
+
+## AI の計測（案C: プロバイダ・モデルの比較）
+
+API キーを手元に持ち出さないよう、**VPS 上で** `api.env` を読み込んで実行する。計測用の画像は `/srv/gift-inspector/bench/` に置く（撮影画像と同じく、架空のデモ用の印刷物だけにする）。
+
+```bash
+# 手元: 計測用の画像を送る（デプロイで bench-ai.js も配置される）
+rsync -az <画像のフォルダ>/ gift-vps:/srv/gift-inspector/bench/
+# VPS: 実行（モデル・回数・オーダー=画像 は適宜変える）
+sudo bash -c 'set -a; . /etc/gift-inspector/api.env; set +a; \
+  node /srv/gift-inspector/api/bench-ai.js --provider google --model gemini-3.5-flash --runs 5 \
+  --orders /srv/gift-inspector/db/seeds/demo_orders.json \
+  GIFT-DEMO-001=/srv/gift-inspector/bench/demo001.jpg GIFT-DEMO-003=/srv/gift-inspector/bench/demo003.jpg'
+```
+
+1試行ごとの JSON 行と、画像ごとの `[集計]`（判定の内訳・成功時の応答 p50/p95・読取結果の種類）が出る。読取結果の種類が 1 なら、毎回同じ結果（再現性あり）。結果は Issue に記録する。
+
 ## デモデータの変更
 
 1. `db/seeds/demo_orders.json` を編集する（唯一の元データ）

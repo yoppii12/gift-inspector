@@ -3,7 +3,7 @@ import {access, mkdir, statfs} from 'node:fs/promises';
 
 import type {FastifyPluginAsync} from 'fastify';
 
-import {describeConfig} from '../config';
+import {type Config, describeConfig, providerKeyName} from '../config';
 import type {AppDeps} from '../app';
 
 const MIN_FREE_BYTES = 500 * 1024 * 1024;
@@ -49,7 +49,7 @@ export const healthRoutes: FastifyPluginAsync<AppDeps> = async (app, {db, config
     }
 
     const aiConfigured =
-      config.AI_PROVIDER === 'mock' || (config.AI_MODEL !== '' && config.AI_API_KEY !== '');
+      config.AI_PROVIDER === 'mock' || (config.AI_MODEL !== '' && hasProviderKey(config));
     checks.ai = aiConfigured
       ? {ok: true, detail: `${config.AI_PROVIDER}${config.AI_MODEL ? `/${config.AI_MODEL}` : ''}`}
       : {ok: false, detail: 'AIの設定が不足しています'};
@@ -64,3 +64,8 @@ export const healthRoutes: FastifyPluginAsync<AppDeps> = async (app, {db, config
     });
   });
 };
+
+function hasProviderKey(config: Config): boolean {
+  const name = providerKeyName(config.AI_PROVIDER);
+  return name !== null && config[name] !== '';
+}
