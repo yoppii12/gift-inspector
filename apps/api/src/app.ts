@@ -3,18 +3,21 @@ import {randomUUID} from 'node:crypto';
 import {AppError, TIMEOUTS_MS} from '@gift-inspector/shared';
 import Fastify, {type FastifyBaseLogger, type FastifyInstance} from 'fastify';
 
+import type {AiProvider} from './ai/types';
 import type {Config} from './config';
 import type {Db} from './db/pool';
 import {sendError, toAppError} from './lib/errors';
 import type {Notifier} from './lib/notifier';
 import {clientErrorRoutes} from './routes/client-errors';
 import {healthRoutes} from './routes/health';
+import {inspectionRoutes} from './routes/inspections';
 import {ordersRoutes} from './routes/orders';
 
 export interface AppDeps {
   config: Config;
   db: Db;
   notifier: Notifier;
+  provider: AiProvider;
 }
 
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9-]{8,64}$/;
@@ -67,6 +70,7 @@ export function buildApp(
   void app.register(healthRoutes, deps);
   void app.register(clientErrorRoutes, deps);
   void app.register(ordersRoutes, deps);
+  void app.register(inspectionRoutes, deps);
 
   return app;
 }

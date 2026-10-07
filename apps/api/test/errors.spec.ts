@@ -5,6 +5,7 @@ import {join} from 'node:path';
 import {AppError, ERROR_CATALOG, type ErrorResponseBody} from '@gift-inspector/shared';
 import {describe, expect, it, vi} from 'vitest';
 
+import {MOCK_READING, MockProvider} from '../src/ai/providers/mock';
 import {buildApp} from '../src/app';
 import {loadConfig} from '../src/config';
 import type {Db} from '../src/db/pool';
@@ -29,7 +30,15 @@ function setup(dbImpl: Partial<Db> = {}) {
     getConnection: vi.fn(() => Promise.reject(connError('ECONNREFUSED'))),
     ...dbImpl,
   } as unknown as Db;
-  const app = buildApp({config, db, notifier}, {logger: false});
+  const app = buildApp(
+    {
+      config,
+      db,
+      notifier,
+      provider: new MockProvider([{type: 'tool_use', input: MOCK_READING}], 0),
+    },
+    {logger: false}
+  );
   return {app, events, notifier};
 }
 

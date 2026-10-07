@@ -46,6 +46,7 @@ npm run dev:web                   # http://localhost:5173（/api は API に中�
 | コマンド | 内容 |
 |---|---|
 | `npm run check` | lint・型検査・テスト（コミット前に必ず通す） |
+| `npm run test:db -w @gift-inspector/api` | 検品 API の結合テスト。Docker で MySQL 8.0 を起動して実行する（`-- --down` で削除）。DB まわりを変えたら必ず実行する |
 | `npm run build` | API と web のビルド |
 | `npm run demo-kit` | デモ用データから SQL シード・QR・印刷用 PDF を生成 |
 | `npm run gen:nginx -w @gift-inspector/api` | OpenResty のエラー応答をエラーカタログから生成 |

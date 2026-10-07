@@ -9,7 +9,8 @@
     "start": "node dist/server.js",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "gen:nginx": "tsx scripts/gen-nginx-error-pages.ts"
+    "gen:nginx": "tsx scripts/gen-nginx-error-pages.ts",
+    "test:db": "bash scripts/test-db.sh"
   },
   "dependencies": {
     "@fastify/multipart": "^10.1.2",
