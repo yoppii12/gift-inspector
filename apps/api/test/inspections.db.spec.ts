@@ -9,6 +9,7 @@ import type {ErrorResponseBody, InspectionResult} from '@gift-inspector/shared';
 import mysql from 'mysql2/promise';
 import {afterAll, beforeAll, describe, expect, it, vi} from 'vitest';
 
+import {PROMPT_VERSION} from '../src/ai/prompt';
 import {MOCK_READING, MockProvider, type MockStep} from '../src/ai/providers/mock';
 import {ProviderError} from '../src/ai/types';
 import {buildApp} from '../src/app';
@@ -100,7 +101,7 @@ describe.skipIf(!enabled)('POST /api/inspections（MySQL）', () => {
       overall: 'OK',
       error_code: null,
       ai_attempt_count: 1,
-      prompt_version: 'read-v1',
+      prompt_version: PROMPT_VERSION,
     });
     expect(r?.image_sha256).toHaveLength(64);
   });
