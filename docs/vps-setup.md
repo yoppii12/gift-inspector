@@ -33,8 +33,11 @@
 
 ## 1. 事前準備（さくらのコントロールパネル・DNS）
 
-1. さくらのVPS コントロールパネルで OS を **Ubuntu 24.04** にしてインストールする（初期ユーザー `ubuntu`）。
-2. **パケットフィルタ**（さくら側のファイアウォール）で、22・80・443 を許可する。UFW とは別物なので、両方で許可が必要です。
+1. さくらのVPS コントロールパネルで OS を **Ubuntu 24.04 LTS** にしてインストールする（初期ユーザー `ubuntu`）。
+   - **26.04 などの新しい版は選ばない。** OpenResty の公式 apt リポジトリが未対応（2026/10/7 時点で 26.04 向けは 404）で、8章が通らない。
+   - 再インストールするとホスト鍵が変わり、手元の SSH が `REMOTE HOST IDENTIFICATION HAS CHANGED` で止まる。コントロールパネルのコンソールなどで指紋を確かめてから、`ssh-keygen -R <VPSのIP>` で古い記録を消す。
+2. **パケットフィルタ**（さくら側のファイアウォール）で、22・80・443 を許可する。UFW とは別物です。
+   - パケットフィルタを**無効**にしている場合、さくら側では全ポートが開いている。UFW（3章）が唯一の防御になるので、2章のあとすぐに 3章を行う。
 3. DNS に A レコードを登録する: `gift-inspector-dev.laplust.com` → VPS の IPv4 アドレス。
    - IPv6（AAAA）は登録しない（OpenResty は IPv4 のみで待ち受けます）。
 
@@ -42,7 +45,19 @@
 ```bash
 dig +short gift-inspector-dev.laplust.com   # VPS の IPv4 が返ること
 ssh ubuntu@<VPSのIP>                         # ログインできること
+. /etc/os-release && echo $VERSION_CODENAME  # （VPS 上で）noble であること
 ```
+
+### 1.1 構築作業中だけ sudo をパスワードなしにする（Claude Code で構築する場合）
+
+Claude Code などから非対話で構築する場合、`ubuntu` の sudo がパスワードを求めると先に進めない。**構築作業の間だけ** パスワードなしにし、終わったら必ず削除する（17章）。担当者が自分のターミナルで1回だけ実行する。
+
+```bash
+ssh -t ubuntu@<VPSのIP> \
+  "echo 'ubuntu ALL=(ALL) NOPASSWD:ALL' | sudo tee /etc/sudoers.d/90-setup-temp && sudo chmod 440 /etc/sudoers.d/90-setup-temp"
+```
+
+**確認**: `ssh ubuntu@<VPSのIP> 'sudo -n true && echo OK'` が `OK`。
 
 ---
 
@@ -55,8 +70,8 @@ sudo apt-get update && sudo apt-get -y upgrade
 sudo timedatectl set-timezone Asia/Tokyo
 sudo hostnamectl set-hostname gift-inspector-dev
 
-# ログイン用ユーザー（sudo 可）
-sudo adduser deploy                 # パスワードを設定（sudo 時に使う。社内の管理表で保管）
+# ログイン用ユーザー（sudo 可）。パスワードは後で担当者が自分で設定する（下記）
+sudo adduser --disabled-password --gecos "" deploy
 sudo usermod -aG sudo deploy
 
 # API 実行用ユーザー（ログイン不可）
@@ -67,9 +82,15 @@ sudo apt-get -y install unattended-upgrades
 sudo dpkg-reconfigure -f noninteractive unattended-upgrades
 ```
 
-手元の PC から `deploy` に公開鍵を登録します。
+`ubuntu` に登録済みの公開鍵を `deploy` にも登録します（`deploy` はパスワードがないため `ssh-copy-id` は使えない）。
 ```bash
-ssh-copy-id -i ~/.ssh/<鍵>.pub deploy@<VPSのIP>
+sudo install -d -m 700 -o deploy -g deploy /home/deploy/.ssh
+sudo install -m 600 -o deploy -g deploy ~/.ssh/authorized_keys /home/deploy/.ssh/authorized_keys
+```
+
+`deploy` の sudo 用パスワードは、**担当者が自分のターミナルで**設定します（作業者や AI にパスワードを渡さない。社内の管理表で保管）。
+```bash
+ssh -t ubuntu@<VPSのIP> "sudo passwd deploy"
 ```
 
 手元の `~/.ssh/config` に追記します（`deploy.sh` が `gift-vps` という名前で接続します）。
@@ -81,6 +102,8 @@ Host gift-vps
 ```
 
 **別のターミナルで `ssh gift-vps` でログインでき、`sudo -v` が通ることを確認してから**、パスワードログインと root ログインを禁止します。
+
+さくらの初期状態は `PasswordAuthentication yes` / `PermitRootLogin without-password`（2026/10/7 確認）。`sshd_config.d/` 内は**先に読まれたファイルの値が優先**されるため、変更後は必ず `sshd -T` で実効値を確認する。
 ```bash
 sudo tee /etc/ssh/sshd_config.d/90-gift-inspector.conf > /dev/null <<'EOF'
 PasswordAuthentication no
@@ -94,6 +117,8 @@ sudo sshd -t && sudo systemctl reload ssh
 ```bash
 ssh gift-vps 'whoami && sudo -v && echo sudo-ok'   # deploy / sudo-ok
 ssh -o PubkeyAuthentication=no deploy@<VPSのIP>   # Permission denied になること
+# （VPS 上で）実効値が passwordauthentication no / permitrootlogin no であること
+sudo sshd -T | grep -iE "^(passwordauthentication|permitrootlogin)"
 ```
 
 ---
@@ -177,9 +202,9 @@ sudo mv /tmp/low-memory.cnf /etc/mysql/mysql.conf.d/zz-gift-inspector.cnf
 sudo systemctl restart mysql
 ```
 
-DB とユーザーを作ります。パスワードは生成して控えます（`api.env` と `mysql-client.cnf` に使う）。
+DB とユーザーを作ります。パスワードは VPS 上で生成し、**画面にもログにも出さず** `mysql-client.cnf`（root のみ読める）に直接書き込みます。`api.env`（12.1）へはこのファイルから転記します。人が控える必要はありません（必要なら `sudo cat` で確認できる）。
 ```bash
-DB_PASS=$(openssl rand -base64 24 | tr -d '/+=' | cut -c1-24); echo "$DB_PASS"   # 控える
+DB_PASS=$(openssl rand -base64 24 | tr -d '/+=' | cut -c1-24)
 sudo mysql <<SQL
 CREATE DATABASE gift_inspector CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 CREATE USER 'gift_inspector'@'localhost' IDENTIFIED BY '${DB_PASS}';
@@ -261,9 +286,10 @@ EOF
 sudo chmod +x /etc/letsencrypt/renewal-hooks/deploy/reload-openresty.sh
 ```
 
-本番の設定に切り替えます（BASIC 認証のファイルを先に作るため、10章を済ませてから reload してもよい）。
+本番の設定に切り替えます。**切り替える前に、10章の前半（空のパスワードファイルの作成）を済ませる**こと。ファイルがないと、認証の失敗ではなく 500 エラーになります。
 ```bash
 sudo cp /tmp/openresty/gift-inspector.conf /usr/local/openresty/nginx/conf/sites/gift-inspector.conf
+sudo openresty -t && sudo systemctl reload openresty
 ```
 
 **確認**
@@ -276,16 +302,20 @@ systemctl list-timers | grep certbot
 
 ## 10. BASIC 認証
 
-社内検証用とデモ用で**別のアカウント**を作ります（デモ用はコーリング社に共有する前提。検証期間とデモでパスワードを分ける）。
+9章で本番設定に切り替える**前に**、空のパスワードファイルを作っておきます。アカウントを作るまでは全員が 401 になり、認証なしで公開される時間を作りません。
 ```bash
 sudo apt-get -y install apache2-utils
-sudo htpasswd -c -B /etc/gift-inspector/htpasswd internal     # 社内検証用
-sudo htpasswd -B /etc/gift-inspector/htpasswd demo            # デモ用
-sudo chown root:www-data /etc/gift-inspector/htpasswd
-sudo chmod 640 /etc/gift-inspector/htpasswd
-
+sudo install -m 640 -o root -g www-data /dev/null /etc/gift-inspector/htpasswd
 sudo openresty -t && sudo systemctl reload openresty
 ```
+
+社内検証用とデモ用で**別のアカウント**を作ります（デモ用は顧客に共有する前提。検証期間とデモでパスワードを分ける）。パスワードは**担当者が自分のターミナルで**入力します（作業者や AI に渡さない）。
+```bash
+ssh -t ubuntu@<VPSのIP> \
+  "sudo htpasswd -B /etc/gift-inspector/htpasswd internal && sudo htpasswd -B /etc/gift-inspector/htpasswd demo"
+```
+
+認証を通した動作確認を作業者が行う場合は、確認用の一時アカウントを作り、**確認後すぐに削除する**（`sudo htpasswd -D /etc/gift-inspector/htpasswd <一時アカウント>`）。
 
 **確認**（手元の PC）
 ```bash
@@ -316,9 +346,10 @@ sudo systemctl restart fail2ban
 
 ### 12.1 環境変数
 
-`/etc/gift-inspector/api.env` を作ります。キーの一覧は `.env.example` を参照。
+`/etc/gift-inspector/api.env` を作ります。キーの一覧は `.env.example` を参照。DB のパスワードは `mysql-client.cnf` から転記し、画面に出しません。
 ```bash
-sudo tee /etc/gift-inspector/api.env > /dev/null <<'EOF'
+DB_PASS=$(sudo sed -n 's/^password=//p' /etc/gift-inspector/mysql-client.cnf)
+sudo tee /etc/gift-inspector/api.env > /dev/null <<EOF
 NODE_ENV=production
 API_HOST=127.0.0.1
 API_PORT=3000
@@ -326,7 +357,7 @@ APP_VERSION=unknown
 DB_HOST=127.0.0.1
 DB_PORT=3306
 DB_USER=gift_inspector
-DB_PASSWORD=<6章で控えたパスワード>
+DB_PASSWORD=${DB_PASS}
 DB_NAME=gift_inspector
 IMAGE_DIR=/var/lib/gift-inspector/images
 IMAGE_MAX_BYTES=5242880
@@ -337,6 +368,7 @@ REF_MISMATCH_BLOCKS_OK=false
 DEV_MODE_ENABLED=false
 SLACK_WEBHOOK_URL=<通知先。空なら通知しない>
 EOF
+unset DB_PASS
 sudo chown root:giftinsp /etc/gift-inspector/api.env
 sudo chmod 640 /etc/gift-inspector/api.env
 ```
@@ -356,7 +388,10 @@ sudo systemctl enable gift-inspector-api     # 起動はデプロイ後
 
 ### 12.3 初回デプロイ（手元の PC）
 
+手元の前提: **Node.js 22**（`node -v` で確認。macOS の既定が 18 などの場合は nvm で 22 を使う）。`deploy.sh` は bash スクリプトなので、zsh に貼り付けず、そのまま実行する（zsh では変数が単語分割されず、同じ処理を手で打つと失敗する）。
+
 ```bash
+node -v                      # v22.x
 npm ci
 infra/scripts/deploy.sh gift-vps
 ```
@@ -440,3 +475,19 @@ ps -eo rss,comm --sort=-rss | head -8 | awk '{printf "%6.0fMB %s\n", $1/1024, $2
 | 利用者から「検品ID」「受付ID」を聞いた | `sudo journalctl -u gift-inspector-api -o cat \| grep <ID>`、`grep <受付ID> /var/log/openresty/access.log` |
 
 運用・撤去の手順は `docs/ops.md` を参照。
+
+---
+
+## 17. 構築後の後始末
+
+1.1 で作った**一時的な sudo 設定を削除**します。以後、sudo は `deploy` のパスワード（2章）で行います。
+```bash
+sudo rm /etc/sudoers.d/90-setup-temp
+```
+
+**確認**: `ssh ubuntu@<VPSのIP> 'sudo -n true'` が `a password is required` で失敗すること。
+
+あわせて、構築中に作った確認用の一時アカウント（BASIC 認証）が残っていないことを確認します。
+```bash
+sudo cut -d: -f1 /etc/gift-inspector/htpasswd   # internal と demo だけであること
+```
