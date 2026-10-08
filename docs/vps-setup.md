@@ -361,12 +361,14 @@ DB_PASSWORD=${DB_PASS}
 DB_NAME=gift_inspector
 IMAGE_DIR=/var/lib/gift-inspector/images
 IMAGE_MAX_BYTES=5242880
-AI_PROVIDER=<mock | anthropic | google>
+AI_PROVIDER=<mock | anthropic | google | cti>
 AI_MODEL=<モデル名。例: claude-opus-5-5 / gemini-3.5-flash>
 # Claude の推論の深さ（low | medium | high。空ならモデルの既定）
 AI_EFFORT=
 ANTHROPIC_API_KEY=
 GEMINI_API_KEY=
+CTI_BASE_URL=https://api.laplust.com/v0/apps/1013
+CTI_API_KEY=
 REF_MISMATCH_BLOCKS_OK=false
 DEV_MODE_ENABLED=false
 SLACK_WEBHOOK_URL=<通知先。空なら通知しない>
@@ -376,7 +378,7 @@ sudo chown root:giftinsp /etc/gift-inspector/api.env
 sudo chmod 640 /etc/gift-inspector/api.env
 ```
 
-> API キーは**この heredoc に書かず**、担当者が自分のターミナルから設定する（キーを画面・履歴・チャットに残さない）。`ANTHROPIC_API_KEY` / `GEMINI_API_KEY` の設定コマンドは `docs/ops.md`「AI の API キーを設定する」を参照。
+> API キーは**この heredoc に書かず**、担当者が自分のターミナルから設定する（キーを画面・履歴・チャットに残さない）。`ANTHROPIC_API_KEY` / `GEMINI_API_KEY` / `CTI_API_KEY` の設定コマンドは `docs/ops.md`「AI の API キーを設定する」を参照。
 
 > AI キーが届く前（10/8 の導通確認）は、`NODE_ENV=production` だと `AI_PROVIDER=mock` で起動できません（偽の判定を本番で出さないための安全装置）。導通確認の間だけ `NODE_ENV=development` と `AI_PROVIDER=mock` で起動し、キーが届いたら `production` に戻してください。
 

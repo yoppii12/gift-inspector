@@ -29,11 +29,11 @@ sudo mysql --defaults-extra-file=/etc/gift-inspector/mysql-client.cnf gift_inspe
 キーは**チャット・Issue・Slack・コマンドライン引数に書かない**。（VPS のログインシェルが bash であることが前提。`read -s` を使うため）担当者が自分のターミナルで次を実行し、表示された入力欄に貼り付ける（画面にも履歴にも残らない）。最後に `設定済みの行数: 1` と出れば完了。
 
 ```bash
-# NAME=ANTHROPIC_API_KEY（キーは sk-ant- で始まる）または NAME=GEMINI_API_KEY（AIza / AQ. で始まる）
+# NAME=ANTHROPIC_API_KEY（sk-ant- で始まる）、NAME=GEMINI_API_KEY（AIza / AQ. で始まる）、NAME=CTI_API_KEY（eyJ で始まる）
 ssh -t gift-vps '
 NAME=GEMINI_API_KEY
 read -rsp "$NAME を貼り付けて Enter（表示されません）: " K; echo
-case "$NAME:$K" in ANTHROPIC_API_KEY:sk-ant-*|GEMINI_API_KEY:AIza*|GEMINI_API_KEY:AQ.*) ;; *) echo "形式が違います。中止します"; exit 1;; esac
+case "$NAME:$K" in ANTHROPIC_API_KEY:sk-ant-*|GEMINI_API_KEY:AIza*|GEMINI_API_KEY:AQ.*|CTI_API_KEY:eyJ*) ;; *) echo "形式が違います。中止します"; exit 1;; esac
 printf "%s" "$K" | sudo env NAME=$NAME python3 -c "
 import os, sys, re
 p = \"/etc/gift-inspector/api.env\"; name = os.environ[\"NAME\"]
@@ -110,7 +110,7 @@ sudo bash -c 'set -a; . /etc/gift-inspector/api.env; set +a; \
   GIFT-DEMO-001=/srv/gift-inspector/bench/demo001.jpg GIFT-DEMO-003=/srv/gift-inspector/bench/demo003.jpg'
 ```
 
-Claude の場合は `--provider anthropic --model claude-opus-5-5`（推論の深さは `--effort low|medium|high`）。
+Claude の場合は `--provider anthropic --model claude-opus-5-5`（推論の深さは `--effort low|medium|high`）。CTI-Cloud（社内の Gemma）の場合は `--provider cti --model <記録用のモデル名>`（`CTI_BASE_URL`・`CTI_API_KEY` を api.env から読む）。CTI-Cloud の読取指示・スキーマは `docs/cti-cloud/read_gift_items.yaml` が正本で、CTI-Cloud の Structure ページに登録して使う。
 
 1試行ごとの JSON 行と、画像ごとの `[集計]`（判定の内訳・成功時の応答 p50/p95・読取結果の種類）が出る。読取結果の種類が 1 なら、毎回同じ結果（再現性あり）。結果は Issue に記録する。
 

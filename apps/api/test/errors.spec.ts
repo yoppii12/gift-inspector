@@ -206,6 +206,23 @@ describe('設定の検証', () => {
     expect(JSON.stringify(describeConfig(config))).not.toContain('AIza-secret');
   });
 
+  it('cti は CTI_API_KEY と CTI_BASE_URL が必須で、起動情報にキーを出さない', () => {
+    const base = {
+      DB_USER: 'u',
+      DB_NAME: 'n',
+      IMAGE_DIR: '/tmp',
+      AI_PROVIDER: 'cti',
+      AI_MODEL: 'gemma',
+    };
+    expect(() => loadConfig(base)).toThrow(/CTI_API_KEY.*CTI_BASE_URL|CTI_BASE_URL.*CTI_API_KEY/);
+    const config = loadConfig({
+      ...base,
+      CTI_API_KEY: 'eyJ-secret',
+      CTI_BASE_URL: 'https://api.laplust.com/v0/apps/1013',
+    });
+    expect(JSON.stringify(describeConfig(config))).not.toContain('eyJ-secret');
+  });
+
   it('エラーメッセージに値そのものを含めない', () => {
     try {
       loadConfig({

@@ -147,7 +147,7 @@ export async function runInspection(
     ai: {
       provider: deps.provider.name,
       model: deps.provider.model,
-      promptVersion: PROMPT_VERSION,
+      promptVersion: deps.provider.promptVersion ?? PROMPT_VERSION,
       schemaVersion: SCHEMA_VERSION,
     },
     appVersion: deps.config.APP_VERSION,

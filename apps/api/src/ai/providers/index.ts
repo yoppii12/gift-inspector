@@ -1,6 +1,7 @@
 import type {Config} from '../../config';
 import type {AiProvider} from '../types';
 import {AnthropicProvider} from './anthropic';
+import {CtiProvider} from './cti';
 import {GoogleProvider} from './google';
 import {MockProvider} from './mock';
 
@@ -19,6 +20,12 @@ export function createProvider(config: Config): AiProvider {
         apiKey: config.ANTHROPIC_API_KEY,
         model: config.AI_MODEL,
         effort: config.AI_EFFORT || null,
+      });
+    case 'cti':
+      return new CtiProvider({
+        apiKey: config.CTI_API_KEY,
+        baseUrl: config.CTI_BASE_URL,
+        model: config.AI_MODEL,
       });
   }
 }

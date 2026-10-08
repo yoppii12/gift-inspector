@@ -25,13 +25,16 @@ const envSchema = z
       .positive()
       .default(5 * 1024 * 1024),
 
-    AI_PROVIDER: z.enum(['mock', 'anthropic', 'google']).default('mock'),
+    AI_PROVIDER: z.enum(['mock', 'anthropic', 'google', 'cti']).default('mock'),
     AI_MODEL: z.string().default(''),
     // Claude の推論の深さ（空ならモデルの既定）。計測で決める
     AI_EFFORT: z.union([z.literal(''), z.enum(['low', 'medium', 'high'])]).default(''),
     // キーはプロバイダごとに持つ（両方で計測して比較するため。切り替えで上書きしない）
     ANTHROPIC_API_KEY: z.string().default(''),
     GEMINI_API_KEY: z.string().default(''),
+    // CTI-Cloud（社内の Gemma）。App のベース URL（例: https://api.laplust.com/v0/apps/1013）とキー
+    CTI_BASE_URL: z.union([z.literal(''), z.url()]).default(''),
+    CTI_API_KEY: z.string().default(''),
     AI_MOCK_SCENARIO: z
       .enum(['ok', 'schema_invalid', 'timeout', 'rate_limited', 'auth'])
       .default('ok'),
@@ -62,6 +65,8 @@ const envSchema = z
       const keyName = providerKeyName(env.AI_PROVIDER);
       if (keyName && !env[keyName])
         ctx.addIssue({code: 'custom', path: [keyName], message: '必須です'});
+      if (env.AI_PROVIDER === 'cti' && !env.CTI_BASE_URL)
+        ctx.addIssue({code: 'custom', path: ['CTI_BASE_URL'], message: '必須です'});
     }
   });
 
@@ -69,10 +74,11 @@ export type Config = z.infer<typeof envSchema>;
 
 /** プロバイダが使う API キーの環境変数名 */
 export function providerKeyName(
-  provider: 'mock' | 'anthropic' | 'google'
-): 'ANTHROPIC_API_KEY' | 'GEMINI_API_KEY' | null {
+  provider: 'mock' | 'anthropic' | 'google' | 'cti'
+): 'ANTHROPIC_API_KEY' | 'GEMINI_API_KEY' | 'CTI_API_KEY' | null {
   if (provider === 'anthropic') return 'ANTHROPIC_API_KEY';
   if (provider === 'google') return 'GEMINI_API_KEY';
+  if (provider === 'cti') return 'CTI_API_KEY';
   return null;
 }
 
