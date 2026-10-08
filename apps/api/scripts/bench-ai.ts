@@ -55,8 +55,8 @@ function createProvider(): AiProvider {
   }
   if (values.provider === 'cti') {
     return new CtiProvider({
-      apiKey: process.env.CTI_API_KEY ?? fail('CTI_API_KEY がありません'),
-      baseUrl: process.env.CTI_BASE_URL ?? fail('CTI_BASE_URL がありません'),
+      apiKey: process.env.CTI_API_KEY || fail('CTI_API_KEY がありません'),
+      baseUrl: process.env.CTI_BASE_URL || fail('CTI_BASE_URL がありません'),
       model,
     });
   }

@@ -9,8 +9,10 @@ import {TIMEOUTS_MS} from '@gift-inspector/shared';
 import {describe, expect, it, vi} from 'vitest';
 
 import {type GuardDeps, guardedRead} from '../src/ai/guard';
-import {SYSTEM_PROMPT, TOOL_INPUT_SCHEMA, USER_PROMPT} from '../src/ai/prompt';
-import {CTI_PROMPT_VERSION, CtiProvider} from '../src/ai/providers/cti';
+import {parse as parseYaml} from 'yaml';
+
+import {SYSTEM_PROMPT, TOOL_INPUT_SCHEMA} from '../src/ai/prompt';
+import {CTI_PROMPT_VERSION, CTI_SYSTEM_PROMPT, CtiProvider} from '../src/ai/providers/cti';
 import {UNPARSEABLE} from '../src/ai/providers/google';
 import {MOCK_READING} from '../src/ai/providers/mock';
 import {ProviderError, type ReadRequest} from '../src/ai/types';
@@ -101,6 +103,13 @@ describe('応答の変換', () => {
     expect(res.toolInput).toEqual(MOCK_READING);
   });
 
+  it('x-request-id があれば記録する', async () => {
+    const res = await provider(
+      fetchReturning(text(JSON.stringify(MOCK_READING), 200, {'x-request-id': 'req-9'}))
+    ).read(request());
+    expect(res.requestId).toBe('req-9');
+  });
+
   it('JSON として読めない応答は UNPARSEABLE（strict スキーマで不適合になる）', async () => {
     const res = await provider(fetchReturning(text('御祝です'))).read(request());
     expect(res).toMatchObject({stopReason: 'tool_use', toolInput: UNPARSEABLE});
@@ -147,6 +156,50 @@ describe('失敗の変換', () => {
       .read(request(c.signal))
       .catch((e: unknown) => e);
     expect(err).toMatchObject({kind: 'timeout'});
+  });
+
+  it('Retry-After が空なら待ち時間を渡さない（0 にしない）', async () => {
+    const err = (await provider(fetchReturning(text('busy', 429, {'retry-after': ' '})))
+      .read(request())
+      .catch((e: unknown) => e)) as ProviderError;
+    expect(err.retryAfterMs).toBeNull();
+  });
+
+  it('200 で HTML が返ればサーバー側の障害（network。判定不能にしない）', async () => {
+    for (const res of [
+      text('<html><body>maintenance</body></html>', 200, {'content-type': 'text/html'}),
+      text('  <!doctype html><p>x</p>'),
+    ]) {
+      const err = await provider(fetchReturning(res))
+        .read(request())
+        .catch((e: unknown) => e);
+      expect(err).toMatchObject({kind: 'network', status: null});
+    }
+  });
+
+  it('本文を読む途中で失敗したら network、中断なら timeout', async () => {
+    const broken = () =>
+      ({
+        ok: true,
+        status: 200,
+        headers: new Headers(),
+        text: () => Promise.reject(new TypeError('terminated')),
+        clone() {
+          return this;
+        },
+      }) as unknown as Response;
+    const err = await provider(fetchReturning(broken()))
+      .read(request())
+      .catch((e: unknown) => e);
+    expect(err).toMatchObject({kind: 'network'});
+    expect(String((err as Error).message)).toContain('HTTP 200');
+
+    const c = new AbortController();
+    c.abort(new DOMException('timeout', 'TimeoutError'));
+    const aborted = await provider(fetchReturning(broken()))
+      .read(request(c.signal))
+      .catch((e: unknown) => e);
+    expect(aborted).toMatchObject({kind: 'timeout'});
   });
 
   it('キー・URL・モデルが空なら作れない（起動時に失敗させる）', () => {
@@ -198,6 +251,23 @@ describe('guard と組み合わせた結果（3.1）', () => {
     expect(r.calls).toBe(2);
   });
 
+  it.each([
+    ['null', 'AI_SCHEMA_NO_TOOL_USE'],
+    ['[]', 'AI_SCHEMA_INVALID'],
+    ['"御祝"', 'AI_SCHEMA_INVALID'],
+    [JSON.stringify(JSON.stringify(JSON.stringify(MOCK_READING))), 'AI_SCHEMA_INVALID'],
+  ])('オブジェクトでない JSON（%s）が2回続けば UNREADABLE（%s）', async (body, reason) => {
+    const r = await run(text(body));
+    expect(r.result).toMatchObject({status: 'unreadable', reason});
+    expect(r.calls).toBe(2);
+  });
+
+  it('200 で HTML が2回続けば ERROR（AI_UNAVAILABLE）。判定不能にしない', async () => {
+    const r = await run(text('<html>maintenance</html>', 200, {'content-type': 'text/html'}));
+    expect(r.result).toMatchObject({status: 'error', code: 'AI_UNAVAILABLE'});
+    expect(r.calls).toBe(2);
+  });
+
   it('応答の raw・エラーの記録にキーが含まれない', async () => {
     const a = await run(ok());
     const b = await run(htmlError(401, 'Authorization Required'));
@@ -206,40 +276,51 @@ describe('guard と組み合わせた結果（3.1）', () => {
 });
 
 describe('Structure 定義（docs/cti-cloud/read_gift_items.yaml）', () => {
-  const yaml = readFileSync(
-    fileURLToPath(new URL('../../../docs/cti-cloud/read_gift_items.yaml', import.meta.url)),
-    'utf8'
-  );
-  const schema = TOOL_INPUT_SCHEMA as {
-    properties: Record<string, {type?: string | string[]; enum?: string[]}>;
-    required: string[];
-  };
+  interface Script {
+    get?: {key: string};
+    'core.multimodal_generation'?: {
+      input: {image: string; system: string};
+      output: {text: {format: {type: string; schema: Record<string, unknown>}}};
+    };
+    [step: string]: unknown;
+  }
+  const structure = parseYaml(
+    readFileSync(
+      fileURLToPath(new URL('../../../docs/cti-cloud/read_gift_items.yaml', import.meta.url)),
+      'utf8'
+    )
+  ) as {paths: Record<string, {post: {script: Script[]}}>};
+  const script = structure.paths['/read_gift_items']?.post.script ?? [];
+  const generation = script.find(step => step['core.multimodal_generation'])?.[
+    'core.multimodal_generation'
+  ];
 
-  it('読取指示は prompt.ts と同じ（SYSTEM_PROMPT の各行と、読み取る項目の説明をすべて含む）', () => {
-    const lines = [
-      ...SYSTEM_PROMPT.split('\n'),
-      ...USER_PROMPT.split('\n').filter(l => l.startsWith('- ')),
-    ];
-    for (const line of lines.map(l => l.trim()).filter(Boolean)) {
-      expect(yaml, line).toContain(line);
+  /** 説明文を除き、null 許容の書き方（anyOf と type の配列）をそろえる */
+  function normalize(node: unknown): unknown {
+    if (Array.isArray(node)) return node.map(normalize);
+    if (node === null || typeof node !== 'object') return node;
+    const {description: _d, $schema: _s, ...rest} = node as Record<string, unknown>;
+    const anyOf = rest.anyOf as {type?: unknown}[] | undefined;
+    if (anyOf?.every(a => Object.keys(a).length === 1 && typeof a.type === 'string')) {
+      const {anyOf: _a, ...others} = rest;
+      return normalize({...others, type: anyOf.map(a => a.type)});
     }
+    return Object.fromEntries(Object.entries(rest).map(([k, v]) => [k, normalize(v)]));
+  }
+
+  it('読取指示は CTI_SYSTEM_PROMPT（prompt.ts の指示・項目の説明）と完全に一致する', () => {
+    expect(generation?.input.system).toBe(CTI_SYSTEM_PROMPT);
+    expect(CTI_SYSTEM_PROMPT).toContain(SYSTEM_PROMPT);
   });
 
-  it('スキーマの項目・必須・選択肢・null の可否がアプリのスキーマと同じ', () => {
-    for (const [key, prop] of Object.entries(schema.properties)) {
-      const block = new RegExp(`\\n {22}${key}:\\n((?: {24}.*\\n)+)`).exec(yaml)?.[1];
-      expect(block, key).toBeDefined();
-      const nullable = Array.isArray(prop.type) && prop.type.includes('null');
-      expect(block?.includes('type: "null"'), `${key} の null`).toBe(nullable);
-      for (const v of prop.enum ?? []) expect(block, `${key} の ${v}`).toContain(`- ${v}`);
-      expect(yaml).toMatch(new RegExp(`required:[\\s\\S]*- ${key}\\n`));
-    }
-    expect(yaml).toContain('additionalProperties: false');
+  it('スキーマはアプリの読取スキーマと同じ（項目・型・null の可否・選択肢・必須・余計な項目の拒否）', () => {
+    expect(generation?.output.text.format.type).toBe('json_object');
+    expect(normalize(generation?.output.text.format.schema)).toEqual(normalize(TOOL_INPUT_SCHEMA));
   });
 
   it('受け取るのは画像だけで、画像を保存しない', () => {
-    expect(yaml.match(/- get:/g)).toHaveLength(1);
-    expect(yaml).toContain('key: image');
-    expect(yaml).not.toMatch(/^\s*- app\.file\.put:/m);
+    expect(script.filter(step => step.get).map(step => step.get?.key)).toEqual(['image']);
+    expect(generation?.input.image).toBe('$image');
+    expect(script.some(step => 'app.file.put' in step)).toBe(false);
   });
 });

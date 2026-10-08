@@ -58,6 +58,10 @@ echo "設定済みの行数: $(sudo grep -c "^$NAME=." /etc/gift-inspector/api.e
 
 `AI_EFFORT` は anthropic のときだけ指定できる。指定したまま google にすると設定エラーで API が起動しない。
 
+CTI-Cloud（社内の Gemma、`AI_PROVIDER=cti`）は**計測・検証用**で、デモの切り替え先にはしない（2026/10/08 の計測で判定は正しいが、1試行に 5〜22 秒かかり、30 秒のタイムアウトに達することがある。#39）。使うときは `CTI_BASE_URL`・`CTI_API_KEY` を設定し、`AI_EFFORT` は空にする。
+
+CTI-Cloud の読取指示とスキーマは `docs/cti-cloud/read_gift_items.yaml` が正本。**CTI-Cloud の Structure ページを直接編集しない**（このファイルを PR で変え、`CTI_PROMPT_VERSION` を上げてから、同じ内容を Structure ページに貼る）。貼り替えたら計測を1回行い、`読取結果の種類=1`（同じ写真で毎回同じ結果。温度0が効いていること）を確かめる。
+
 **切り替えの目安**: 画面で `AI_UNAVAILABLE`・`AI_OVERLOADED`・`AI_TIMEOUT` が続けて出る（再試行しても直らない）、または Anthropic の障害情報（https://status.anthropic.com）で障害が出ている。デモ中なら、迷ったら切り替える（切り替えは 1 分ほどで、戻すのも同じ手順）。
 
 ### Gemini に切り替える（VPS 上で）

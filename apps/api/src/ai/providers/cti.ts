@@ -4,6 +4,7 @@
  * こちらからは送らない。正解情報も送らない（読取と照合の分離）。
  * ここではリトライしない。失敗は ProviderError に、応答は guard の分類に合う stopReason に変換する。
  */
+import {SYSTEM_PROMPT, USER_PROMPT} from '../prompt';
 import {
   abortError,
   type AiProvider,
@@ -18,6 +19,19 @@ import {UNPARSEABLE} from './google';
  * （判定記録の prompt_version に残し、結果の差を追えるようにする）
  */
 export const CTI_PROMPT_VERSION = 'cti-read-v1';
+
+/**
+ * Structure に登録する読取指示（system）。prompt.ts の指示・項目の説明と同じにし、返し方の指示だけ JSON 向けにする。
+ * CTI-Cloud には送らない（Structure 側にある）。docs/cti-cloud/read_gift_items.yaml との一致をテストで確かめる
+ */
+export const CTI_SYSTEM_PROMPT = [
+  SYSTEM_PROMPT,
+  '',
+  '読み取る項目:',
+  ...USER_PROMPT.split('\n').filter(line => line.startsWith('- ')),
+  '',
+  '結果は指定された JSON の形式だけで返してください。Markdown、コードブロック、説明文、指定外の項目は含めないでください。',
+].join('\n');
 
 const ENDPOINT = 'read_gift_items';
 
@@ -81,6 +95,14 @@ export class CtiProvider implements AiProvider {
     }
 
     if (!res.ok) throw httpError(res, text);
+    // 200 で HTML（メンテナンス画面・前段のプロキシ等）が返るのはサーバー側の障害。
+    // 読取結果として扱うと「判定不能（写真が悪い）」に見えるので、一時障害（AI_UNAVAILABLE）にする
+    if (
+      /text\/html/i.test(res.headers.get('content-type') ?? '') ||
+      text.trimStart().startsWith('<')
+    ) {
+      throw new ProviderError('network', `CTI-Cloud が HTML を返した（HTTP ${res.status}）`);
+    }
     return toResponse(text, res.headers.get('x-request-id'));
   }
 }
@@ -96,7 +118,8 @@ function httpError(res: Response, text: string): ProviderError {
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 300);
-  const seconds = Number(res.headers.get('retry-after') ?? NaN);
+  const header = res.headers.get('retry-after')?.trim();
+  const seconds = header ? Number(header) : NaN;
   return new ProviderError('http', `CTI-Cloud HTTP ${res.status}: ${summary}`, {
     status: res.status,
     retryAfterMs: Number.isFinite(seconds) && seconds >= 0 ? Math.round(seconds * 1000) : null,
