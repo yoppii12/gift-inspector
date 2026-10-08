@@ -59,6 +59,10 @@ export class ProviderError extends Error {
 export interface AiProvider {
   readonly name: string;
   readonly model: string;
+  /**
+   * 読取指示がプロバイダ側にある場合（CTI-Cloud の Structure）の版。なければ prompt.ts の PROMPT_VERSION を記録する
+   */
+  readonly promptVersion?: string;
   /** 成功時は応答、通信失敗は ProviderError を投げる。SDK の自動リトライは無効にしておくこと */
   read(request: ReadRequest): Promise<ProviderResponse>;
 }

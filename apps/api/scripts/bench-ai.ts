@@ -14,6 +14,7 @@ import {TIMEOUTS_MS} from '@gift-inspector/shared';
 
 import {guardedRead} from '../src/ai/guard';
 import {AnthropicProvider, type Effort} from '../src/ai/providers/anthropic';
+import {CtiProvider} from '../src/ai/providers/cti';
 import {GoogleProvider} from '../src/ai/providers/google';
 import type {AiProvider} from '../src/ai/types';
 import {type Expected, judge} from '../src/judge/judge';
@@ -50,6 +51,13 @@ function createProvider(): AiProvider {
       apiKey: process.env.ANTHROPIC_API_KEY ?? fail('ANTHROPIC_API_KEY がありません'),
       model,
       effort: (values.effort as Effort | undefined) ?? null,
+    });
+  }
+  if (values.provider === 'cti') {
+    return new CtiProvider({
+      apiKey: process.env.CTI_API_KEY || fail('CTI_API_KEY がありません'),
+      baseUrl: process.env.CTI_BASE_URL || fail('CTI_BASE_URL がありません'),
+      model,
     });
   }
   return fail(`未対応のプロバイダ: ${values.provider}`);
