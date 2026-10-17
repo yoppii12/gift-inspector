@@ -378,8 +378,13 @@ function replay(
   if (!detail?.result || detail.result.overall !== stored.overall) {
     throw new AppError('SYS_UNEXPECTED', {detail: '保存済みの判定結果を復元できない'});
   }
+  // 以前の形式（参考判定が `reference` オブジェクト、#53 より前）で保存された結果は、一覧を空にして返す
+  const {reference: _legacy, ...saved} = detail.result as typeof detail.result & {
+    reference?: unknown;
+  };
   return {
-    ...detail.result,
+    ...saved,
+    references: saved.references ?? [],
     completedAt: (stored.completedAt ?? stored.createdAt).toISOString(),
     replayed: true,
   };

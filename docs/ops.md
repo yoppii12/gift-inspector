@@ -133,6 +133,17 @@ Claude の場合は `--provider anthropic --model claude-opus-5-5`（推論の�
 - 無効のとき（既定）は、手入力の依頼は `DEV_MODE_DISABLED`（403）で断られる。画面の入口は `?dev=1` を付けても出るが、送信すると上記のエラーになる
 - 無効に戻す: `DEV_MODE_ENABLED=false` にして再起動。今の設定は `curl -s http://127.0.0.1:3000/api/health` の `devModeEnabled` で確認できる
 
+## DB の変更を含む版のデプロイ（マイグレーション）
+
+`db/migrations/` にファイルが増えた版は、新しい API を動かす前にマイグレーションを流す。順序を逆にすると、新しい API が存在しない列を読んで、オーダー一覧や検品がすべてエラーになる。
+
+1. 手元で `infra/scripts/deploy.sh` を実行する（ファイルの転送と API の再起動が行われる）
+2. すぐに VPS で `sudo MYSQL_DEFAULTS_FILE=/etc/gift-inspector/mysql-client.cnf /srv/gift-inspector/db/migrate.sh --seed`
+3. `sudo systemctl restart gift-inspector-api` で API を再起動し、ヘルスチェックとオーダー一覧を確かめる
+4. AI の出力形式（`AI_READ_SCHEMA_VERSION`）が変わった版で CTI-Cloud を使う場合は、Structure を `docs/cti-cloud/read_gift_items.yaml` に貼り替える
+
+1 と 2 の間は数十秒、オーダー一覧・検品がエラーになる。デモ中・社内検証中は避ける。マイグレーションは列の追加・値の変換だけなので、古い API のまま先に流しても動作に影響しない（先に 2 を流してから 1 を実行すると、エラーの時間をなくせる）。
+
 ## デモデータの変更
 
 1. `db/seeds/demo_orders.json` を編集する（唯一の元データ）

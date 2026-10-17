@@ -164,6 +164,30 @@ describe.skipIf(!enabled)('POST /api/inspections（MySQL）', () => {
     expect(second).toMatchObject({overall: first.overall, replayed: true});
   });
 
+  it('以前の形式（参考判定が reference オブジェクト）で保存された結果を再送しても、references の一覧で返す（#53）', async () => {
+    const {app} = setup();
+    const id = randomUUID();
+    await post(app, id, 'GIFT-DEMO-001');
+    // #53 より前の形式に書き換える
+    await pool.query(
+      `UPDATE inspections SET judge_detail = JSON_SET(JSON_REMOVE(judge_detail, '$.result.references'),
+         '$.result.reference', JSON_OBJECT('noshiPresent', true)) WHERE inspection_id = ?`,
+      [id]
+    );
+    const again = JSON.parse((await post(app, id, 'GIFT-DEMO-001')).payload) as Record<
+      string,
+      unknown
+    >;
+    expect(again).toMatchObject({replayed: true, overall: 'OK', references: []});
+    expect(again).not.toHaveProperty('reference');
+  });
+
+  it('/api/orders は袋・手提げ袋の登録を返す（未設定は null）', async () => {
+    const {app} = setup();
+    const res = await app.inject({method: 'GET', url: '/api/orders/GIFT-DEMO-001'});
+    expect(JSON.parse(res.payload)).toMatchObject({order: {bagType: null, carrierBag: null}});
+  });
+
   it('同じ inspection_id の同時送信でも、AI は1回しか呼ばない', async () => {
     const {app, provider} = setup();
     const id = randomUUID();

@@ -246,6 +246,7 @@ describe('ラッピング資材・手提げ袋の参考判定（#53）', () => {
     ['布巾着袋', {drawstring_bag_present: true}, ['MANUAL_MISSING']],
     ['なし', {}, []],
     ['なし', {paper_flat_bag_present: true}, ['BAG_UNEXPECTED']],
+    ['なし', {paper_flat_bag_present: true, drawstring_bag_present: true}, ['BAG_UNEXPECTED']],
   ] as const)('袋の登録が %s で %j なら警告 %j', (bagType, patch, warnings) => {
     expect(refWarnings({...EXPECTED, bagType}, materials(patch))).toEqual(warnings);
   });
@@ -287,6 +288,16 @@ describe('ラッピング資材・手提げ袋の参考判定（#53）', () => {
       ['seal', 'あり', 'なし', 'MISMATCH'],
       ['carrier_bag', 'なし', 'なし', 'MATCH'],
     ]);
+  });
+
+  it('袋の登録が「なし」で袋が写っていなければ一致', () => {
+    const refs = referenceItems({...EXPECTED, bagType: 'なし'}, materials({}));
+    expect(refs.find(r => r.key === 'bag')).toMatchObject({
+      expected: 'なし',
+      read: 'なし',
+      status: 'MATCH',
+    });
+    expect(refs.map(r => r.key)).not.toContain('seal');
   });
 
   it('AI が読み取れなかったときは、読み取りなし・判別できず', () => {
