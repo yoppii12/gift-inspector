@@ -43,7 +43,16 @@ const BAG_NOTES: Record<BagType, string | null> = {
 export function OrderDetails({order}: {order: OrderView}) {
   return (
     <Card>
-      <Row label="のし" value={order.noshiRequired ? `あり・${order.noshiType ?? ''}` : 'なし'} />
+      <Row
+        label="のし"
+        value={
+          order.noshiRequired
+            ? ['あり', order.noshiType, order.noshiSize && `${order.noshiSize}のし紙`]
+                .filter(Boolean)
+                .join('・')
+            : 'なし'
+        }
+      />
       {order.noshiRequired && <Row label="表書き" value={order.omotegaki ?? '—'} />}
       {order.noshiRequired && <Row label="名入れ" value={order.atena ?? 'なし'} />}
       <Row

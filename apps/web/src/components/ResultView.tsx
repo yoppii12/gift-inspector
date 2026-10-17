@@ -294,6 +294,11 @@ function ReferenceRows({result}: {result: InspectionResult}) {
             <Box component="span" sx={{color: color.main60}}>
               （登録: {r.expected}）
             </Box>
+            {r.detail && (
+              <Box component="span" sx={{display: 'block', color: color.main60, fontSize: 12}}>
+                {r.detail}
+              </Box>
+            )}
           </Typography>
           <Typography
             variant="body2"

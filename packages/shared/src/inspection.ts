@@ -1,5 +1,6 @@
 import type {
   BagType,
+  NoshiSize,
   ItemKey,
   ItemReason,
   ItemResult,
@@ -55,6 +56,8 @@ export interface ReferenceItem {
   read: string | null;
   /** MATCH = 一致、MISMATCH = 不一致（警告あり）、UNKNOWN = 読み取れず判別できない */
   status: 'MATCH' | 'MISMATCH' | 'UNKNOWN';
+  /** 補足（例: のし紙の縦横比「縦横比 3.54」、判定できなかった理由） */
+  detail?: string;
 }
 
 /**
@@ -86,6 +89,8 @@ export interface OrderView {
   noshiType: MizuhikiType | null;
   noshiRequired: boolean;
   cardRequired: boolean;
+  /** のし紙の大きさ（#55）。null は参考判定の対象外 */
+  noshiSize: NoshiSize | null;
   /** ラッピングの袋（#53）。null は参考判定の対象外 */
   bagType: BagType | null;
   /** 紙手提げ袋（黒）を付けるか（#53）。null は参考判定の対象外 */
@@ -106,4 +111,7 @@ export const REF_WARNING_LABELS: Record<RefWarning, string> = {
   MANUAL_MISSING: '布巾着袋の取扱説明書が写っていません',
   CARRIER_BAG_MISSING: '紙手提げ袋が写っていません',
   CARRIER_BAG_UNEXPECTED: '手提げ袋不要のオーダーに、紙手提げ袋が写っています',
+  NOSHI_SIZE_MISMATCH: 'のし紙の大きさ（長い・短い）が登録と異なります',
+  NOSHI_SIZE_UNKNOWN:
+    'のし紙の大きさを判別できませんでした（のし紙を平らに置き、四辺が写るように撮影してください）',
 };

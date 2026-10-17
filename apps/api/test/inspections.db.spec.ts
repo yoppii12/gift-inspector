@@ -16,7 +16,7 @@ import {buildApp} from '../src/app';
 import {loadConfig} from '../src/config';
 import type {Db} from '../src/db/pool';
 import {sweepAbandoned} from '../src/inspection/sweeper';
-import {fakeHeic, fakeJpeg, inspectionForm, manualForm, tempDir} from './helpers';
+import {fakeHeic, fakeJpeg, inspectionForm, manualForm, photo, tempDir} from './helpers';
 
 const enabled = Boolean(process.env.TEST_DB_HOST);
 if (!enabled) {
@@ -134,6 +134,43 @@ describe.skipIf(!enabled)('POST /api/inspections（MySQL）', () => {
         ['carrier_bag', 'MISMATCH'],
       ]);
       expect(await row(id)).toMatchObject({expected_bag_type: '紙平袋', expected_carrier_bag: 1});
+    } finally {
+      await pool.query(
+        'DELETE FROM inspections WHERE order_id = (SELECT id FROM demo_orders WHERE order_code = ?)',
+        [code]
+      );
+      await pool.query('DELETE FROM demo_orders WHERE order_code = ?', [code]);
+    }
+  });
+
+  it('のし紙の大きさの登録があるオーダーは、縦横比を計測して参考判定に載せ、記録する（#55）', async () => {
+    const code = 'GIFT-DEMO-991';
+    await pool.query(
+      `INSERT INTO demo_orders (order_code, sort_order, omotegaki, atena, card_text, noshi_type,
+         noshi_size, noshi_required, card_required)
+       VALUES (?, 991, '御祝', '佐藤 花子', 'ご出産おめでとうございます。心ばかりの品をお贈りします。',
+         '花結び', '長い', 1, 1)`,
+      [code]
+    );
+    try {
+      const {app} = setup();
+      const id = randomUUID();
+      const image = photo([{cx: 800, cy: 600, short: 260, long: 260 * 2.95}]);
+      const body = JSON.parse((await post(app, id, code, image)).payload) as InspectionResult;
+      expect(body.overall).toBe('OK');
+      expect(body.refWarnings).toEqual(['NOSHI_SIZE_MISMATCH']);
+      expect(body.references.find(r => r.key === 'noshi_size')).toMatchObject({
+        expected: '長い',
+        read: '短い',
+        status: 'MISMATCH',
+      });
+      const r = await row(id);
+      expect(r).toMatchObject({
+        expected_noshi_size: '長い',
+        noshi_size_measured: '短い',
+        noshi_size_reason: 'MEASURED',
+      });
+      expect(Number(r?.noshi_aspect_ratio)).toBeCloseTo(2.95, 1);
     } finally {
       await pool.query(
         'DELETE FROM inspections WHERE order_id = (SELECT id FROM demo_orders WHERE order_code = ?)',

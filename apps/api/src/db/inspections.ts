@@ -6,6 +6,7 @@ import type {ResultSetHeader, RowDataPacket} from 'mysql2/promise';
 
 import type {AttemptRecord} from '../ai/guard';
 import type {Judgement} from '../judge/judge';
+import type {NoshiSizeMeasurement} from '../measure/noshi-size';
 import {type Db, withDb} from './pool';
 
 export interface PendingInspection {
@@ -21,6 +22,7 @@ export interface PendingInspection {
     noshiType: string | null;
     noshiRequired: boolean;
     cardRequired: boolean;
+    noshiSize: string | null;
     bagType: string | null;
     carrierBag: boolean | null;
   };
@@ -55,6 +57,7 @@ export interface StoredInspection {
     noshiType: string | null;
     noshiRequired: boolean;
     cardRequired: boolean;
+    noshiSize: string | null;
     bagType: string | null;
     carrierBag: boolean | null;
   };
@@ -80,6 +83,7 @@ interface StoredRow extends RowDataPacket {
   expected_noshi_type: string | null;
   expected_noshi_required: number;
   expected_card_required: number;
+  expected_noshi_size: string | null;
   expected_bag_type: string | null;
   expected_carrier_bag: number | null;
   image_sha256: string | null;
@@ -97,7 +101,7 @@ export async function findInspection(
       `SELECT i.id, i.inspection_id, i.status, i.overall, i.error_code, o.order_code, i.mode, i.image_sha256,
               i.expected_omotegaki, i.expected_atena, i.expected_card_text, i.expected_noshi_type,
               i.expected_noshi_required, i.expected_card_required,
-              i.expected_bag_type, i.expected_carrier_bag,
+              i.expected_noshi_size, i.expected_bag_type, i.expected_carrier_bag,
               i.created_at, i.completed_at, i.judge_detail
          FROM inspections i LEFT JOIN demo_orders o ON o.id = i.order_id
         WHERE i.inspection_id = ?`,
@@ -120,6 +124,7 @@ export async function findInspection(
         noshiType: r.expected_noshi_type,
         noshiRequired: r.expected_noshi_required === 1,
         cardRequired: r.expected_card_required === 1,
+        noshiSize: r.expected_noshi_size,
         bagType: r.expected_bag_type,
         carrierBag: r.expected_carrier_bag === null ? null : r.expected_carrier_bag === 1,
       },
@@ -139,10 +144,11 @@ export async function insertPending(db: Db, p: PendingInspection): Promise<boole
         `INSERT INTO inspections
           (inspection_id, request_id, order_id, mode, status,
            expected_omotegaki, expected_atena, expected_card_text, expected_noshi_type,
-           expected_noshi_required, expected_card_required, expected_bag_type, expected_carrier_bag,
+           expected_noshi_required, expected_card_required,
+           expected_noshi_size, expected_bag_type, expected_carrier_bag,
            image_path, image_sha256, image_bytes, image_mime, image_width, image_height,
            ai_provider, ai_model, prompt_version, schema_version, app_version, client_ua)
-         VALUES (?, ?, ?, ?, 'PENDING', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, 'PENDING', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           p.inspectionId,
           p.requestId,
@@ -154,6 +160,7 @@ export async function insertPending(db: Db, p: PendingInspection): Promise<boole
           p.expected.noshiType,
           p.expected.noshiRequired ? 1 : 0,
           p.expected.cardRequired ? 1 : 0,
+          p.expected.noshiSize,
           p.expected.bagType,
           p.expected.carrierBag === null ? null : p.expected.carrierBag ? 1 : 0,
           p.image.path,
@@ -188,6 +195,8 @@ export interface Completion {
     cardPresent: boolean | null;
     noshiType: string | null;
   };
+  /** 参考判定のための計測（のし紙の縦横比）。計測しなかったときは null */
+  measurements: {noshiSize: NoshiSizeMeasurement | null};
   tokensIn: number | null;
   tokensOut: number | null;
   durationMs: number;
@@ -226,6 +235,8 @@ export async function completeInspection(
           result_omotegaki = ?, result_atena = ?, result_card = ?,
           reason_omotegaki = ?, reason_atena = ?, reason_card = ?,
           ref_warnings = CAST(? AS JSON), judge_detail = CAST(? AS JSON),
+          noshi_aspect_ratio = ?, noshi_size_measured = ?, noshi_size_reason = ?,
+          noshi_size_detail = CAST(? AS JSON),
           completed_at = CURRENT_TIMESTAMP(3), duration_ms = ?
         WHERE inspection_id = ? AND status = 'PENDING'`,
       [
@@ -252,6 +263,12 @@ export async function completeInspection(
         ca.reason,
         JSON.stringify(j.refWarnings),
         JSON.stringify(c.detail),
+        c.measurements.noshiSize?.ratio ?? null,
+        c.measurements.noshiSize?.size ?? null,
+        c.measurements.noshiSize?.reason ?? null,
+        JSON.stringify(
+          c.measurements.noshiSize ? {candidates: c.measurements.noshiSize.candidates} : null
+        ),
         c.durationMs,
         inspectionId,
       ]

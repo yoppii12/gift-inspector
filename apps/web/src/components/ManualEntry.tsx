@@ -46,6 +46,7 @@ export function ManualEntry({onStart}: {onStart: (order: OrderView) => void}) {
       noshiType: noshiRequired ? noshiType : null,
       cardText: cardRequired ? cardText : null,
       // 資材・手提げ袋の参考判定は手入力モードでは対象外
+      noshiSize: null,
       bagType: null,
       carrierBag: null,
     });

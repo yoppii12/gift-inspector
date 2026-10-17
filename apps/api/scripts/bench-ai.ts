@@ -18,6 +18,7 @@ import {CtiProvider} from '../src/ai/providers/cti';
 import {GoogleProvider} from '../src/ai/providers/google';
 import type {AiProvider} from '../src/ai/types';
 import {type Expected, judge} from '../src/judge/judge';
+import {measureNoshiSize} from '../src/measure/noshi-size';
 import {inspectImage} from '../src/storage/images';
 
 const {values, positionals} = parseArgs({
@@ -100,7 +101,8 @@ for (const arg of positionals) {
   const order =
     orders.find(o => o.orderCode === orderCode) ?? fail(`オーダーがありません: ${orderCode}`);
   const image = readFileSync(path ?? fail(`画像パスがありません: ${arg}`));
-  const {mime} = inspectImage(image);
+  const inspected = inspectImage(image);
+  const {mime} = inspected;
 
   const totals: number[] = [];
   /** 1試行ごとの応答時間（AI 1試行のタイムアウト値を決めるのに使う） */
@@ -117,7 +119,9 @@ for (const arg of positionals) {
       {deadline: started + TIMEOUTS_MS.inspectionTotal, signal: new AbortController().signal}
     );
     const totalMs = Date.now() - started;
-    const j = judge(order.registered, read, {refMismatchBlocksOk: false});
+    // のし紙の縦横比（画像処理。AI の試行ごとには変わらないが、記録をそろえるため毎回出す）
+    const noshiSize = measureNoshiSize(image, mime, inspected);
+    const j = judge(order.registered, read, {refMismatchBlocksOk: false}, {noshiSize});
     const key = j.overall === 'ERROR' ? `ERROR:${j.errorCode}` : j.overall;
     overalls[key] = (overalls[key] ?? 0) + 1;
     if (read.status === 'ok') {
@@ -148,6 +152,7 @@ for (const arg of positionals) {
         tokensOut: read.attempts.at(-1)?.tokensOut ?? null,
         items: j.items?.map(it => `${it.key}:${it.result}`),
         refWarnings: j.refWarnings,
+        noshiSize,
         reading: read.status === 'ok' ? read.data : null,
       })
     );

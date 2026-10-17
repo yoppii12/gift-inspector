@@ -204,6 +204,7 @@ describe('開発用の手入力モード', () => {
     noshiType: '花結び' as const,
     noshiRequired: true,
     cardRequired: false,
+    noshiSize: null,
     bagType: null,
     carrierBag: null,
   };
