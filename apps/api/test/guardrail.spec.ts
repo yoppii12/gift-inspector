@@ -21,7 +21,7 @@ const EXPECTED: Expected = {
   omotegaki: '御祝',
   atena: '佐藤 花子',
   cardText: 'ご出産おめでとうございます。心ばかりの品をお贈りします。',
-  noshiType: '蝶結び',
+  noshiType: '花結び',
   noshiRequired: true,
   cardRequired: true,
 };
@@ -136,6 +136,86 @@ describe('項目の判定（2.1）', () => {
 });
 
 // ---------------------------------------------------------------------------
+describe('表書き「無地」と名入れなし（#51）', () => {
+  const BLANK: Expected = {...EXPECTED, omotegaki: '無地'};
+  const blankRead = (patch: Partial<AiReadResult>): AiReadResult => ({
+    ...READ,
+    omotegaki: null,
+    omotegaki_blank: true,
+    ...patch,
+  });
+
+  it('無地: のし紙が写っていて、AI が「印字なし」と答え、文字も読んでいなければ OK', () => {
+    expect(judgeItem('omotegaki', BLANK, blankRead({}))).toMatchObject({
+      result: 'OK',
+      reason: 'MATCH',
+      blank: true,
+    });
+    expect(judgeItem('omotegaki', {...BLANK, omotegaki: '　無地　'}, blankRead({})).result).toBe(
+      'OK'
+    );
+  });
+
+  it.each([
+    ['文字が読めた（印字されている）', blankRead({omotegaki: '御祝'}), 'NG'],
+    ['「印字なし」と答えたのに文字も読んでいる', blankRead({omotegaki: '寿'}), 'NG'],
+    ['「印字なし」と答えていない', blankRead({omotegaki_blank: false}), 'UNREADABLE'],
+    ['のし紙が写っていない', blankRead({noshi_present: false}), 'NG'],
+  ] as const)('無地: %s は OK にしない（%s）', (_l, read, result) => {
+    expect(judgeItem('omotegaki', BLANK, read).result).toBe(result);
+  });
+
+  it('無地でない正解に「印字なし」と答え、文字も読んでいなければ NG（印字漏れの疑い）', () => {
+    expect(judgeItem('omotegaki', EXPECTED, blankRead({}))).toMatchObject({
+      result: 'NG',
+      reason: 'MISMATCH',
+    });
+  });
+
+  it('無地でない正解で「印字なし」と答えたのに一致する文字も読んでいる（矛盾）は OK にしない', () => {
+    expect(judgeItem('omotegaki', EXPECTED, blankRead({omotegaki: '御祝'})).result).toBe(
+      'UNREADABLE'
+    );
+  });
+
+  it('property: 無地の正解では、文字が読めた・「印字なし」でない・のしがない のどれかがあれば必ず非 OK', () => {
+    const texts = [null, '', '・', '御祝', '無地', '寿', ' '];
+    for (const omotegaki of texts) {
+      for (const omotegaki_blank of [true, false]) {
+        for (const noshi_present of [true, false]) {
+          const item = judgeItem(
+            'omotegaki',
+            BLANK,
+            blankRead({omotegaki, omotegaki_blank, noshi_present})
+          );
+          const okAllowed = noshi_present && omotegaki_blank && normalizeText(omotegaki) === null;
+          if (!okAllowed) expect(item.result, JSON.stringify(item)).not.toBe('OK');
+        }
+      }
+    }
+  });
+
+  it('名入れなし（null）は名入れを対象外にし、他が一致すれば総合 OK', () => {
+    const j = judge({...EXPECTED, atena: null}, ok({...READ, atena: null}), OFF);
+    expect(j.items?.find(i => i.key === 'atena')).toMatchObject({
+      result: 'SKIP',
+      reason: 'NOT_REQUIRED',
+    });
+    expect(j.overall).toBe('OK');
+  });
+
+  it('名入れなしでも、AI がスキーマ不適合なら名入れは SKIP、他は UNREADABLE', () => {
+    const j = judge(
+      {...EXPECTED, atena: null},
+      {status: 'unreadable', reason: 'AI_SCHEMA_INVALID'},
+      OFF
+    );
+    expect(j.overall).toBe('UNREADABLE');
+    expect(j.items?.find(i => i.key === 'atena')?.result).toBe('SKIP');
+    expect(j.items?.find(i => i.key === 'omotegaki')?.result).toBe('UNREADABLE');
+  });
+});
+
 describe('総合の合成（2.2）', () => {
   const combos: ItemResult[][] = [];
   for (const a of ITEM_RESULTS)
@@ -212,7 +292,7 @@ describe('総合判定 judge()', () => {
 
   it.each([
     ['表書きが空', {omotegaki: '  '}],
-    ['宛名が null', {atena: null}],
+    ['名入れが空白だけ', {atena: '  '}],
     ['カード必須なのに文面が記号のみ', {cardText: '・・'}],
     ['のし必須なのに水引が null', {noshiType: null}],
     ['判定する項目がない', {noshiRequired: false, cardRequired: false}],

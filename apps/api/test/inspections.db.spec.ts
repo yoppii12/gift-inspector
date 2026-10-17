@@ -332,7 +332,7 @@ describe.skipIf(!enabled)('POST /api/inspections（MySQL）', () => {
       omotegaki: '御祝',
       atena: '佐藤 花子',
       cardText: MOCK_READING.card_text ?? '',
-      noshiType: '蝶結び',
+      noshiType: '花結び',
     };
 
     it('手入力の正解で、通常と同じ規則で判定し、mode=manual・オーダーなしで記録する', async () => {

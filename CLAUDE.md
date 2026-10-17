@@ -138,6 +138,7 @@
 | D8 | 撮影は OS標準カメラ（`<input type="file" accept="image/*" capture="environment">`）を主経路。ブラウザ内カメラ（getUserMedia）はQR読取のみ | 権限拒否・アプリ内ブラウザ対策 |
 | D9 | エラーは握りつぶさない。全エラーはエラーカタログ（`packages/shared/src/errors.ts`）のコードを持ち、利用者にはコード＋検品IDを表示、開発者にはログ・DBで追跡可能にする | `docs/error-handling.md` |
 | D10 | 本番以外の秘匿情報・実値はコミットしない。`.env.example` のみ管理 | |
+| D11 | 水引の名称は「花結び」「結び切り」（お客様の呼び方。1〜10章の「蝶結び」は花結びと読み替える）。表書き「無地」は印字しないことが正解、名入れなし（null）は名入れを対象外にする（2026/10/17） | #51、`docs/error-handling.md` 2.1 |
 
 ## 12. 開発ルール
 

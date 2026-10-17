@@ -29,7 +29,7 @@ export function ManualEntry({onStart}: {onStart: (order: OrderView) => void}) {
   const [cardRequired, setCardRequired] = useState(true);
   const [omotegaki, setOmotegaki] = useState('');
   const [atena, setAtena] = useState('');
-  const [noshiType, setNoshiType] = useState<MizuhikiType>('蝶結び');
+  const [noshiType, setNoshiType] = useState<MizuhikiType>('花結び');
   const [cardText, setCardText] = useState('');
 
   const submit = (event: FormEvent) => {
@@ -39,7 +39,8 @@ export function ManualEntry({onStart}: {onStart: (order: OrderView) => void}) {
       noshiRequired,
       cardRequired,
       omotegaki: noshiRequired ? omotegaki : null,
-      atena: noshiRequired ? atena : null,
+      // 空欄は名入れなし（名入れは判定の対象外）
+      atena: noshiRequired && atena.trim() !== '' ? atena : null,
       noshiType: noshiRequired ? noshiType : null,
       cardText: cardRequired ? cardText : null,
     });
@@ -68,13 +69,14 @@ export function ManualEntry({onStart}: {onStart: (order: OrderView) => void}) {
                 label="表書き"
                 value={omotegaki}
                 onChange={e => setOmotegaki(e.target.value)}
+                helperText="印字しない場合は「無地」"
                 required
               />
               <TextField
-                label="名入れ・宛名"
+                label="名入れ"
                 value={atena}
                 onChange={e => setAtena(e.target.value)}
-                required
+                helperText="名入れなしの場合は空欄"
               />
               <TextField
                 select

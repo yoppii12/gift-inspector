@@ -7,7 +7,7 @@
         "omotegaki": "御祝",
         "atena": "佐藤 花子",
         "cardText": "ご出産おめでとうございます。心ばかりの品をお贈りします。",
-        "noshiType": "蝶結び",
+        "noshiType": "花結び",
         "noshiRequired": true,
         "cardRequired": true
       },
@@ -15,7 +15,7 @@
         "omotegaki": "御祝",
         "atena": "佐藤 花子",
         "cardText": "ご出産おめでとうございます。心ばかりの品をお贈りします。",
-        "noshiType": "蝶結び"
+        "noshiType": "花結び"
       },
       "expected": "OK",
       "note": "登録内容どおり（のし＋カード）"
@@ -26,7 +26,7 @@
         "omotegaki": "内祝",
         "atena": "高橋 健一",
         "cardText": null,
-        "noshiType": "蝶結び",
+        "noshiType": "花結び",
         "noshiRequired": true,
         "cardRequired": false
       },
@@ -34,7 +34,7 @@
         "omotegaki": "内祝",
         "atena": "高橋 健一",
         "cardText": null,
-        "noshiType": "蝶結び"
+        "noshiType": "花結び"
       },
       "expected": "OK",
       "note": "カードなしのオーダー（のしのみ）"
@@ -45,7 +45,7 @@
         "omotegaki": "御礼",
         "atena": "鈴木 一郎",
         "cardText": "このたびは大変お世話になりました。心ばかりの品をお贈りいたします。",
-        "noshiType": "蝶結び",
+        "noshiType": "花結び",
         "noshiRequired": true,
         "cardRequired": true
       },
@@ -53,7 +53,7 @@
         "omotegaki": "御祝",
         "atena": "鈴木 一郎",
         "cardText": "このたびは大変お世話になりました。心ばかりの品をお贈りいたします。",
-        "noshiType": "蝶結び"
+        "noshiType": "花結び"
       },
       "expected": "NG",
       "note": "表書きNG（登録「御礼」／現物「御祝」）"

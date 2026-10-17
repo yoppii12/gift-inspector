@@ -2,11 +2,12 @@
  * AI への読取指示。正解情報（オーダーの登録内容）は一切含めない（CLAUDE.md 2章 ガードレール5）。
  * 文面を変えたら PROMPT_VERSION を上げる（判定記録に残り、結果の差を追えるようにするため）。
  * read-v2: 返し方の指示をプロバイダ別（tool use / JSON）に分けた
+ * read-v3: 水引を「花結び」に、表書きが印字されていないか（omotegaki_blank）を追加。位置は水引の上・下で説明（横長ののし紙にも合わせる。#51）
  */
 import {AI_READ_SCHEMA_VERSION, aiReadSchema} from '@gift-inspector/shared';
 import {z} from 'zod';
 
-export const PROMPT_VERSION = 'read-v2';
+export const PROMPT_VERSION = 'read-v3';
 
 export const SYSTEM_PROMPT = `あなたはギフト出荷の検品で、写真に写った「のし」と「メッセージカード」の印刷文字を書き写す担当です。
 
@@ -23,9 +24,10 @@ export const JSON_INSTRUCTION = '- 結果は指定された JSON の形式だけ
 export const USER_PROMPT = `この写真を読み取ってください。
 
 - noshi_present: のし紙が写っているか
-- mizuhiki_type: のしの水引の結び方（「蝶結び」「結び切り」、判別できなければ「不明」）
-- omotegaki: のしの上段（水引の上）の表書き
-- atena: のしの下段（水引の下）の名入れ
+- mizuhiki_type: のしの水引の結び方（「花結び」「結び切り」、判別できなければ「不明」）
+- omotegaki: のしの水引の上に印字された表書き（印字されていなければ null）
+- omotegaki_blank: のし紙が写っていて、水引の上（表書きの位置）に文字が何も印字されていないか（のし紙が写っていなければ false）
+- atena: のしの水引の下に印字された名入れ（印字されていなければ null）
 - card_present: メッセージカードが写っているか
 - card_text: メッセージカードの印刷文字（改行は除いて1行で）`;
 

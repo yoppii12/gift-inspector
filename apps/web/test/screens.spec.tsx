@@ -61,8 +61,8 @@ function result(overrides: Partial<InspectionResult> = {}): InspectionResult {
     reference: {
       noshiPresent: true,
       cardPresent: false,
-      mizuhikiRead: '蝶結び',
-      mizuhikiExpected: '蝶結び',
+      mizuhikiRead: '花結び',
+      mizuhikiExpected: '花結び',
     },
     completedAt: '2026-10-07T00:00:00Z',
     replayed: false,
@@ -141,7 +141,7 @@ describe('Inspect（撮影〜送信）', () => {
     omotegaki: '御祝',
     atena: '佐藤 花子',
     cardText: null,
-    noshiType: '蝶結び',
+    noshiType: '花結び',
     noshiRequired: true,
     cardRequired: false,
   };
@@ -245,7 +245,7 @@ describe('開発モードの目印', () => {
     omotegaki: '御祝',
     atena: '佐藤 花子',
     cardText: null,
-    noshiType: '蝶結び' as const,
+    noshiType: '花結び' as const,
     noshiRequired: true,
     cardRequired: false,
   };
@@ -273,7 +273,7 @@ describe('ManualEntry（開発用の手入力）', () => {
     const onStart = vi.fn();
     wrap(<ManualEntry onStart={onStart} />);
     fireEvent.change(screen.getByLabelText(/表書き/), {target: {value: '御礼'}});
-    fireEvent.change(screen.getByLabelText(/名入れ・宛名/), {target: {value: '鈴木 一郎'}});
+    fireEvent.change(screen.getByLabelText(/名入れ/), {target: {value: '鈴木 一郎'}});
     fireEvent.click(screen.getByLabelText('メッセージカードあり'));
     fireEvent.click(screen.getByRole('button', {name: 'この正解で撮影に進む'}));
     expect(onStart).toHaveBeenCalledWith({
@@ -282,7 +282,7 @@ describe('ManualEntry（開発用の手入力）', () => {
       cardRequired: false,
       omotegaki: '御礼',
       atena: '鈴木 一郎',
-      noshiType: '蝶結び',
+      noshiType: '花結び',
       cardText: null,
     });
   });

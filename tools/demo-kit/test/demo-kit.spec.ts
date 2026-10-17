@@ -126,7 +126,7 @@ describe('擬似のし・カード', () => {
     const o = structuredClone(orders[0] as DemoOrder);
     o.registered.noshiRequired = false;
     o.registered.cardRequired = false;
-    o.printed = {omotegaki: '御祝', atena: '佐藤', noshiType: '蝶結び', cardText: null};
+    o.printed = {omotegaki: '御祝', atena: '佐藤', noshiType: '花結び', cardText: null};
     expect(printedContent(o)).toMatchObject({hasNoshi: true, hasCard: false});
     o.printed = {omotegaki: null, atena: null, noshiType: null, cardText: 'ありがとう'};
     expect(printedContent(o)).toMatchObject({hasNoshi: false, hasCard: true});
