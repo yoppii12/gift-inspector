@@ -18,7 +18,7 @@ import {UNPARSEABLE} from './google';
  * CTI-Cloud 側の Structure の版。docs/cti-cloud/read_gift_items.yaml の読取指示・スキーマを変えたら上げる
  * （判定記録の prompt_version に残し、結果の差を追えるようにする）
  */
-export const CTI_PROMPT_VERSION = 'cti-read-v3';
+export const CTI_PROMPT_VERSION = 'cti-read-v4';
 
 /**
  * Structure に登録する読取指示（system）。prompt.ts の指示・項目の説明と同じにし、返し方の指示だけ JSON 向けにする。
