@@ -9,7 +9,8 @@ import {photo} from './helpers';
 
 const SHORT = 260;
 
-describe('のし紙の長短の計測', () => {
+// 合成画像（1600×1200）の生成と JPEG 化をテスト内で行うため、並列実行では既定の 5 秒を超えることがある
+describe('のし紙の長短の計測', {timeout: 30_000}, () => {
   it('しきい値は受領写真の測定値（長い 3.51〜3.58、短い 2.89〜3.01）の間にある', () => {
     expect(LONG_MIN_RATIO).toBeLessThan(3.51);
     expect(SHORT_MAX_RATIO).toBeGreaterThan(3.01);
