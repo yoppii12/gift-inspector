@@ -89,14 +89,12 @@ export function validateOrder(order: DemoOrder): string[] {
   if (pr.noshiType === null && (pr.omotegaki !== null || pr.atena !== null)) {
     at('現物ののしに水引がないのに、表書き・名入れが入っている');
   }
-  if (
-    order.kind === 'pseudo' &&
-    pr.noshiType !== null &&
-    pr.omotegaki === null &&
-    pr.atena === null
-  ) {
-    at('擬似のしに表書きも名入れもない（無地は実物で確認する）');
+  if (order.kind === 'pseudo' && pr.noshiType !== null && pr.omotegaki === null) {
+    at('擬似のしに表書きがない（無地は実物で確認する）');
   }
+  // 現物の「無地」は表書きなし（null）で書く。文字「無地」が印字されていれば判定では不一致になる
+  if (pr.omotegaki === OMOTEGAKI_BLANK)
+    at('現物の表書きに「無地」と書いている（無地は null で表す）');
   if (pr.cardText !== null && [...pr.cardText].length > CARD_TEXT_MAX) {
     at(`現物のカード文面が長すぎる（${CARD_TEXT_MAX} 文字まで）`);
   }

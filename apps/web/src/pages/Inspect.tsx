@@ -248,6 +248,9 @@ function CaptureGuide() {
             巾着袋などは透明の袋から出しておく
           </Typography>
           <Typography component="li" variant="body2">
+            背景は白・グレー・黒以外の無地のマットにする（白い台の上では、のし紙の大きさを測れない）
+          </Typography>
+          <Typography component="li" variant="body2">
             真上から、全体が画面に入るように撮る。影や反射が文字にかからないようにする
           </Typography>
         </Box>
