@@ -59,12 +59,10 @@ function result(overrides: Partial<InspectionResult> = {}): InspectionResult {
       item('card_text', 'SKIP', {reason: 'NOT_REQUIRED'}),
     ],
     refWarnings: [],
-    reference: {
-      noshiPresent: true,
-      cardPresent: false,
-      mizuhikiRead: '花結び',
-      mizuhikiExpected: '花結び',
-    },
+    references: [
+      {key: 'noshi', label: 'のし', expected: 'あり', read: 'あり', status: 'MATCH'},
+      {key: 'mizuhiki', label: '水引', expected: '花結び', read: '花結び', status: 'MATCH'},
+    ],
     completedAt: '2026-10-07T00:00:00Z',
     replayed: false,
     ...overrides,
@@ -90,6 +88,47 @@ describe('ResultView', () => {
       />
     );
     expect(screen.getByText('（印字なし）')).toBeTruthy();
+  });
+
+  it('参考判定の一覧に、登録・読み取り・状態を並べる（#53）', () => {
+    const {container} = wrap(
+      <ResultView
+        result={result({
+          refWarnings: ['SEAL_MISSING'],
+          references: [
+            {
+              key: 'bag',
+              label: 'ラッピングの袋',
+              expected: '紙平袋',
+              read: '紙平袋',
+              status: 'MATCH',
+            },
+            {key: 'seal', label: 'シール', expected: 'あり', read: 'なし', status: 'MISMATCH'},
+            {
+              key: 'carrier_bag',
+              label: '紙手提げ袋（黒）',
+              expected: 'あり',
+              read: null,
+              status: 'UNKNOWN',
+            },
+          ],
+        })}
+        photoUrl={null}
+      />
+    );
+    const statuses = [...container.querySelectorAll('[data-reference]')].map(
+      e => `${e.getAttribute('data-reference')}:${e.getAttribute('data-status')}`
+    );
+    expect(statuses).toEqual(['bag:MATCH', 'seal:MISMATCH', 'carrier_bag:UNKNOWN']);
+    expect(screen.getByText('不一致')).toBeTruthy();
+    expect(screen.getByText('判別できず')).toBeTruthy();
+    expect(screen.getByText('紙平袋のシールが写っていません')).toBeTruthy();
+  });
+
+  it('以前の形式（参考判定の一覧がない）の結果でも表示が壊れない', () => {
+    const legacy = {...result(), references: undefined} as unknown as InspectionResult;
+    wrap(<ResultView result={legacy} photoUrl={null} />);
+    expect(screen.getByText('すべて登録内容と一致しました')).toBeTruthy();
   });
 
   it('OK: 「すべて一致」「出荷に進めます」', () => {
@@ -160,6 +199,8 @@ describe('Inspect（撮影〜送信）', () => {
     noshiType: '花結び',
     noshiRequired: true,
     cardRequired: false,
+    bagType: null,
+    carrierBag: null,
   };
   let ids: number;
 
@@ -264,6 +305,8 @@ describe('開発モードの目印', () => {
     noshiType: '花結び' as const,
     noshiRequired: true,
     cardRequired: false,
+    bagType: null,
+    carrierBag: null,
   };
 
   it('手入力の検品ではヘッダーに「開発モード」を出す', () => {
@@ -296,6 +339,8 @@ describe('ManualEntry（開発用の手入力）', () => {
       orderCode: 'MANUAL',
       noshiRequired: true,
       cardRequired: false,
+      bagType: null,
+      carrierBag: null,
       omotegaki: '御礼',
       atena: '鈴木 一郎',
       noshiType: '花結び',
@@ -340,10 +385,16 @@ describe('OrderDetails（#51）', () => {
           noshiType: '花結び',
           noshiRequired: true,
           cardRequired: true,
+          bagType: '紙平袋',
+          carrierBag: true,
         }}
       />
     );
     expect(screen.getByText('無地')).toBeTruthy();
     expect(screen.getByText('なし')).toBeTruthy();
+    // 資材の登録（#53）
+    expect(screen.getByText('紙平袋')).toBeTruthy();
+    expect(screen.getByText('シール貼り')).toBeTruthy();
+    expect(screen.getByText('あり')).toBeTruthy();
   });
 });

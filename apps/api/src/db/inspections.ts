@@ -21,6 +21,8 @@ export interface PendingInspection {
     noshiType: string | null;
     noshiRequired: boolean;
     cardRequired: boolean;
+    bagType: string | null;
+    carrierBag: boolean | null;
   };
   image: {
     path: string;
@@ -53,6 +55,8 @@ export interface StoredInspection {
     noshiType: string | null;
     noshiRequired: boolean;
     cardRequired: boolean;
+    bagType: string | null;
+    carrierBag: boolean | null;
   };
   /** 再送時に同じ画像かどうかを確かめるため */
   imageSha256: string | null;
@@ -76,6 +80,8 @@ interface StoredRow extends RowDataPacket {
   expected_noshi_type: string | null;
   expected_noshi_required: number;
   expected_card_required: number;
+  expected_bag_type: string | null;
+  expected_carrier_bag: number | null;
   image_sha256: string | null;
   created_at: Date;
   completed_at: Date | null;
@@ -91,6 +97,7 @@ export async function findInspection(
       `SELECT i.id, i.inspection_id, i.status, i.overall, i.error_code, o.order_code, i.mode, i.image_sha256,
               i.expected_omotegaki, i.expected_atena, i.expected_card_text, i.expected_noshi_type,
               i.expected_noshi_required, i.expected_card_required,
+              i.expected_bag_type, i.expected_carrier_bag,
               i.created_at, i.completed_at, i.judge_detail
          FROM inspections i LEFT JOIN demo_orders o ON o.id = i.order_id
         WHERE i.inspection_id = ?`,
@@ -113,6 +120,8 @@ export async function findInspection(
         noshiType: r.expected_noshi_type,
         noshiRequired: r.expected_noshi_required === 1,
         cardRequired: r.expected_card_required === 1,
+        bagType: r.expected_bag_type,
+        carrierBag: r.expected_carrier_bag === null ? null : r.expected_carrier_bag === 1,
       },
       imageSha256: r.image_sha256,
       createdAt: r.created_at,
@@ -130,10 +139,10 @@ export async function insertPending(db: Db, p: PendingInspection): Promise<boole
         `INSERT INTO inspections
           (inspection_id, request_id, order_id, mode, status,
            expected_omotegaki, expected_atena, expected_card_text, expected_noshi_type,
-           expected_noshi_required, expected_card_required,
+           expected_noshi_required, expected_card_required, expected_bag_type, expected_carrier_bag,
            image_path, image_sha256, image_bytes, image_mime, image_width, image_height,
            ai_provider, ai_model, prompt_version, schema_version, app_version, client_ua)
-         VALUES (?, ?, ?, ?, 'PENDING', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, 'PENDING', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           p.inspectionId,
           p.requestId,
@@ -145,6 +154,8 @@ export async function insertPending(db: Db, p: PendingInspection): Promise<boole
           p.expected.noshiType,
           p.expected.noshiRequired ? 1 : 0,
           p.expected.cardRequired ? 1 : 0,
+          p.expected.bagType,
+          p.expected.carrierBag === null ? null : p.expected.carrierBag ? 1 : 0,
           p.image.path,
           p.image.sha256,
           p.image.bytes,

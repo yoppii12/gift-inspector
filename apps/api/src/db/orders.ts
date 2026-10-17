@@ -1,4 +1,4 @@
-import type {MizuhikiType, OrderView} from '@gift-inspector/shared';
+import type {BagType, MizuhikiType, OrderView} from '@gift-inspector/shared';
 import type {RowDataPacket} from 'mysql2/promise';
 
 import {type Db, withDb} from './pool';
@@ -14,10 +14,12 @@ interface OrderRow extends RowDataPacket {
   noshi_type: MizuhikiType | null;
   noshi_required: number;
   card_required: number;
+  bag_type: BagType | null;
+  carrier_bag: number | null;
 }
 
 const COLUMNS =
-  'order_code, omotegaki, atena, card_text, noshi_type, noshi_required, card_required';
+  'order_code, omotegaki, atena, card_text, noshi_type, noshi_required, card_required, bag_type, carrier_bag';
 
 function toOrder(row: OrderRow): DemoOrder {
   return {
@@ -28,6 +30,8 @@ function toOrder(row: OrderRow): DemoOrder {
     noshiType: row.noshi_type,
     noshiRequired: row.noshi_required === 1,
     cardRequired: row.card_required === 1,
+    bagType: row.bag_type,
+    carrierBag: row.carrier_bag === null ? null : row.carrier_bag === 1,
   };
 }
 

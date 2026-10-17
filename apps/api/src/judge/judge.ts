@@ -5,6 +5,7 @@
 import {
   AppError,
   type AiReadResult,
+  type BagType,
   type ErrorCode,
   ITEM_KEYS,
   type ItemKey,
@@ -13,6 +14,9 @@ import {
   type MizuhikiType,
   OMOTEGAKI_BLANK,
   type Overall,
+  REFERENCE_LABELS,
+  type ReferenceItem,
+  type ReferenceKey,
   type RefWarning,
   type UnreadableReason,
 } from '@gift-inspector/shared';
@@ -29,6 +33,10 @@ export interface Expected {
   noshiType: MizuhikiType | null;
   noshiRequired: boolean;
   cardRequired: boolean;
+  /** ラッピングの袋（参考判定）。null は対象外 */
+  bagType: BagType | null;
+  /** 紙手提げ袋（参考判定）。null は対象外 */
+  carrierBag: boolean | null;
 }
 
 /** AI 読取の結果（ai/guard.ts の出力を判定用に絞ったもの） */
@@ -162,7 +170,77 @@ export function refWarnings(expected: Expected, read: AiReadResult): RefWarning[
     if (read.mizuhiki_type === '不明') w.push('MIZUHIKI_UNKNOWN');
     else if (read.mizuhiki_type !== expected.noshiType) w.push('MIZUHIKI_MISMATCH');
   }
+  // ラッピング資材・手提げ袋（オーダーで指定があるときだけ。#53）
+  if (expected.bagType !== null) {
+    const seen = seenBag(read);
+    if (expected.bagType === 'なし') {
+      if (seen !== 'なし') w.push('BAG_UNEXPECTED');
+    } else if (seen === 'なし') {
+      w.push('BAG_MISSING');
+    } else if (seen !== expected.bagType) {
+      w.push('BAG_MISMATCH');
+    }
+    if (expected.bagType === '紙平袋' && !read.seal_present) w.push('SEAL_MISSING');
+    if (expected.bagType === '布巾着袋' && !read.manual_present) w.push('MANUAL_MISSING');
+  }
+  if (expected.carrierBag === true && !read.carrier_bag_present) w.push('CARRIER_BAG_MISSING');
+  if (expected.carrierBag === false && read.carrier_bag_present) {
+    w.push('CARRIER_BAG_UNEXPECTED');
+  }
   return w;
+}
+
+/** 写っていた袋（両方写っていれば両方を並べる。どの登録とも一致しない） */
+function seenBag(read: AiReadResult): string {
+  if (read.paper_flat_bag_present && read.drawstring_bag_present) return '紙平袋・布巾着袋';
+  if (read.paper_flat_bag_present) return '紙平袋';
+  if (read.drawstring_bag_present) return '布巾着袋';
+  return 'なし';
+}
+
+const yesNo = (v: boolean) => (v ? 'あり' : 'なし');
+
+/**
+ * 参考判定の一覧（表示用。判定には使わない）。オーダーで対象になっている項目だけを返す。
+ * AI が読み取れなかったとき（read = null）は、読み取り結果を null・状態を UNKNOWN にする。
+ */
+export function referenceItems(expected: Expected, read: AiReadResult | null): ReferenceItem[] {
+  const items: ReferenceItem[] = [];
+  const add = (
+    key: ReferenceKey,
+    expectedLabel: string,
+    readLabel: string | null,
+    unknown = false
+  ) =>
+    items.push({
+      key,
+      label: REFERENCE_LABELS[key],
+      expected: expectedLabel,
+      read: read === null ? null : readLabel,
+      status:
+        read === null || unknown ? 'UNKNOWN' : readLabel === expectedLabel ? 'MATCH' : 'MISMATCH',
+    });
+
+  add('noshi', yesNo(expected.noshiRequired), read && yesNo(read.noshi_present));
+  if (expected.noshiRequired && expected.noshiType !== null) {
+    // のしが写っていない・判別できないときは水引の一致を判断しない
+    add(
+      'mizuhiki',
+      expected.noshiType,
+      read && (read.noshi_present ? read.mizuhiki_type : null),
+      !read?.noshi_present || read.mizuhiki_type === '不明'
+    );
+  }
+  add('card', yesNo(expected.cardRequired), read && yesNo(read.card_present));
+  if (expected.bagType !== null) {
+    add('bag', expected.bagType, read && seenBag(read));
+    if (expected.bagType === '紙平袋') add('seal', 'あり', read && yesNo(read.seal_present));
+    if (expected.bagType === '布巾着袋') add('manual', 'あり', read && yesNo(read.manual_present));
+  }
+  if (expected.carrierBag !== null) {
+    add('carrier_bag', yesNo(expected.carrierBag), read && yesNo(read.carrier_bag_present));
+  }
+  return items;
 }
 
 /**

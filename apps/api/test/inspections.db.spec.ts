@@ -110,6 +110,39 @@ describe.skipIf(!enabled)('POST /api/inspections（MySQL）', () => {
     expect(r?.image_sha256).toHaveLength(64);
   });
 
+  it('資材の登録があるオーダーは、参考判定の一覧と警告を返し、登録を記録する。主判定は変わらない（#53）', async () => {
+    const code = 'GIFT-DEMO-990';
+    await pool.query(
+      `INSERT INTO demo_orders (order_code, sort_order, omotegaki, atena, card_text, noshi_type,
+         noshi_required, card_required, bag_type, carrier_bag)
+       VALUES (?, 990, '御祝', '佐藤 花子', 'ご出産おめでとうございます。心ばかりの品をお贈りします。',
+         '花結び', 1, 1, '紙平袋', 1)`,
+      [code]
+    );
+    try {
+      const {app} = setup();
+      const id = randomUUID();
+      const body = JSON.parse((await post(app, id, code)).payload) as InspectionResult;
+      expect(body.overall).toBe('OK');
+      expect(body.refWarnings).toEqual(['BAG_MISSING', 'SEAL_MISSING', 'CARRIER_BAG_MISSING']);
+      expect(body.references.map(r => [r.key, r.status])).toEqual([
+        ['noshi', 'MATCH'],
+        ['mizuhiki', 'MATCH'],
+        ['card', 'MATCH'],
+        ['bag', 'MISMATCH'],
+        ['seal', 'MISMATCH'],
+        ['carrier_bag', 'MISMATCH'],
+      ]);
+      expect(await row(id)).toMatchObject({expected_bag_type: '紙平袋', expected_carrier_bag: 1});
+    } finally {
+      await pool.query(
+        'DELETE FROM inspections WHERE order_id = (SELECT id FROM demo_orders WHERE order_code = ?)',
+        [code]
+      );
+      await pool.query('DELETE FROM demo_orders WHERE order_code = ?', [code]);
+    }
+  });
+
   it('デモの意図的 NG（表書き）は 200 / NG で、正解と読取値が並ぶ', async () => {
     const {app} = setup();
     const res = await post(app, randomUUID(), 'GIFT-DEMO-003');
@@ -129,6 +162,30 @@ describe.skipIf(!enabled)('POST /api/inspections（MySQL）', () => {
     const second = JSON.parse((await post(app, id, 'GIFT-DEMO-001')).payload) as InspectionResult;
     expect(provider.requests).toHaveLength(1);
     expect(second).toMatchObject({overall: first.overall, replayed: true});
+  });
+
+  it('以前の形式（参考判定が reference オブジェクト）で保存された結果を再送しても、references の一覧で返す（#53）', async () => {
+    const {app} = setup();
+    const id = randomUUID();
+    await post(app, id, 'GIFT-DEMO-001');
+    // #53 より前の形式に書き換える
+    await pool.query(
+      `UPDATE inspections SET judge_detail = JSON_SET(JSON_REMOVE(judge_detail, '$.result.references'),
+         '$.result.reference', JSON_OBJECT('noshiPresent', true)) WHERE inspection_id = ?`,
+      [id]
+    );
+    const again = JSON.parse((await post(app, id, 'GIFT-DEMO-001')).payload) as Record<
+      string,
+      unknown
+    >;
+    expect(again).toMatchObject({replayed: true, overall: 'OK', references: []});
+    expect(again).not.toHaveProperty('reference');
+  });
+
+  it('/api/orders は袋・手提げ袋の登録を返す（未設定は null）', async () => {
+    const {app} = setup();
+    const res = await app.inject({method: 'GET', url: '/api/orders/GIFT-DEMO-001'});
+    expect(JSON.parse(res.payload)).toMatchObject({order: {bagType: null, carrierBag: null}});
   });
 
   it('同じ inspection_id の同時送信でも、AI は1回しか呼ばない', async () => {

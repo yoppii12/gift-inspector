@@ -46,12 +46,49 @@ export const REF_WARNINGS = [
   'CARD_UNEXPECTED',
   'MIZUHIKI_MISMATCH',
   'MIZUHIKI_UNKNOWN',
+  // #53: ラッピング資材・手提げ袋（オーダーで指定があるときだけ）
+  'BAG_MISSING',
+  'BAG_MISMATCH',
+  'BAG_UNEXPECTED',
+  'SEAL_MISSING',
+  'MANUAL_MISSING',
+  'CARRIER_BAG_MISSING',
+  'CARRIER_BAG_UNEXPECTED',
 ] as const;
 export type RefWarning = (typeof REF_WARNINGS)[number];
 
 /** 水引の種類（お客様の呼び方。PoC の初期は「花結び」を「蝶結び」と呼んでいた。#51） */
 export const MIZUHIKI_TYPES = ['花結び', '結び切り'] as const;
 export type MizuhikiType = (typeof MIZUHIKI_TYPES)[number];
+
+/**
+ * ラッピングの袋（#53）。紙平袋はシール貼り、布巾着袋は取扱説明書の同梱が必須。
+ * オーダーで未設定（null）のときは参考判定の対象外
+ */
+export const BAG_TYPES = ['紙平袋', '布巾着袋', 'なし'] as const;
+export type BagType = (typeof BAG_TYPES)[number];
+
+/** 参考判定の項目（判定結果の一覧の順） */
+export const REFERENCE_KEYS = [
+  'noshi',
+  'mizuhiki',
+  'card',
+  'bag',
+  'seal',
+  'manual',
+  'carrier_bag',
+] as const;
+export type ReferenceKey = (typeof REFERENCE_KEYS)[number];
+
+export const REFERENCE_LABELS: Record<ReferenceKey, string> = {
+  noshi: 'のし',
+  mizuhiki: '水引',
+  card: 'メッセージカード',
+  bag: 'ラッピングの袋',
+  seal: 'シール',
+  manual: '取扱説明書',
+  carrier_bag: '紙手提げ袋（黒）',
+};
 
 /** 表書きの正解がこの値のときは「表書きを印字しない」ことが正解（#51） */
 export const OMOTEGAKI_BLANK = '無地';

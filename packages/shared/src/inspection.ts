@@ -1,8 +1,10 @@
 import type {
+  BagType,
   ItemKey,
   ItemReason,
   ItemResult,
   MizuhikiType,
+  ReferenceKey,
   RefWarning,
   UnreadableReason,
 } from './status';
@@ -23,13 +25,8 @@ export interface InspectionResult {
   unreadableReason: UnreadableReason | null;
   items: InspectionItem[];
   refWarnings: RefWarning[];
-  /** 参考判定の読取値（表示用） */
-  reference: {
-    noshiPresent: boolean | null;
-    cardPresent: boolean | null;
-    mizuhikiRead: string | null;
-    mizuhikiExpected: string | null;
-  };
+  /** 参考判定（表示用。オーダーで対象になっている項目だけ。判定には使わない） */
+  references: ReferenceItem[];
   completedAt: string;
   /** 同じ inspection_id の再送で、保存済みの結果を返したとき true */
   replayed: boolean;
@@ -46,6 +43,18 @@ export interface InspectionItem {
   read: string | null;
   /** AI が「表書きの位置に何も印字されていない」と答えた（表書きのみ。画面で「印字なし」と表示する。#51） */
   readBlank?: boolean;
+}
+
+/** 参考判定の1項目（#53） */
+export interface ReferenceItem {
+  key: ReferenceKey;
+  label: string;
+  /** 登録内容の表示（例: 「あり」「紙平袋」「花結び」） */
+  expected: string;
+  /** 読み取り結果の表示。読み取れなかったときは null */
+  read: string | null;
+  /** MATCH = 一致、MISMATCH = 不一致（警告あり）、UNKNOWN = 読み取れず判別できない */
+  status: 'MATCH' | 'MISMATCH' | 'UNKNOWN';
 }
 
 /**
@@ -77,6 +86,10 @@ export interface OrderView {
   noshiType: MizuhikiType | null;
   noshiRequired: boolean;
   cardRequired: boolean;
+  /** ラッピングの袋（#53）。null は参考判定の対象外 */
+  bagType: BagType | null;
+  /** 紙手提げ袋（黒）を付けるか（#53）。null は参考判定の対象外 */
+  carrierBag: boolean | null;
 }
 
 export const REF_WARNING_LABELS: Record<RefWarning, string> = {
@@ -86,4 +99,11 @@ export const REF_WARNING_LABELS: Record<RefWarning, string> = {
   CARD_UNEXPECTED: 'カード不要のオーダーに、メッセージカードが写っています',
   MIZUHIKI_MISMATCH: '水引の種類が登録と異なります',
   MIZUHIKI_UNKNOWN: '水引の種類を判別できませんでした',
+  BAG_MISSING: 'ラッピングの袋が写っていません',
+  BAG_MISMATCH: 'ラッピングの袋の種類が登録と異なります',
+  BAG_UNEXPECTED: 'ラッピングなしのオーダーに、袋が写っています',
+  SEAL_MISSING: '紙平袋のシールが写っていません',
+  MANUAL_MISSING: '布巾着袋の取扱説明書が写っていません',
+  CARRIER_BAG_MISSING: '紙手提げ袋が写っていません',
+  CARRIER_BAG_UNEXPECTED: '手提げ袋不要のオーダーに、紙手提げ袋が写っています',
 };
