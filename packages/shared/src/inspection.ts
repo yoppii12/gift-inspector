@@ -44,6 +44,8 @@ export interface InspectionItem {
   expected: string | null;
   /** AI の読取値（そのまま） */
   read: string | null;
+  /** AI が「表書きの位置に何も印字されていない」と答えた（表書きのみ。画面で「印字なし」と表示する。#51） */
+  readBlank?: boolean;
 }
 
 /**

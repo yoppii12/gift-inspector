@@ -381,6 +381,20 @@ describe.skipIf(!enabled)('POST /api/inspections（MySQL）', () => {
       });
     });
 
+    it('名入れを空で送ると名入れなし（名入れは SKIP）として判定する（#51）', async () => {
+      const {app} = setup([valid], {devMode: true});
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/inspections',
+        ...manualForm(randomUUID(), fakeJpeg(), {...matching, atena: ''}),
+      });
+      const body = JSON.parse(res.payload) as InspectionResult;
+      expect(body.items.find(i => i.key === 'atena')).toMatchObject({
+        result: 'SKIP',
+        expected: null,
+      });
+    });
+
     it('必須の正解が空なら CONFIG_INVALID_EXPECTED（422）で、AI を呼ばない', async () => {
       const {app, provider} = setup([valid], {devMode: true});
       const res = await app.inject({

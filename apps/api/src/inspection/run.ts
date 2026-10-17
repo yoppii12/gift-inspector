@@ -295,9 +295,6 @@ async function closeQuietly(
   }
 }
 
-/** 表書きの位置に印字がないと AI が答えたときの表示 */
-const BLANK_READ_LABEL = '（印字なし）';
-
 function toResult(
   inspectionId: string,
   target: ReplayTarget,
@@ -312,8 +309,8 @@ function toResult(
     result: i.result,
     reason: i.reason,
     expected: i.expected,
-    // AI が「表書きの位置に何も印字されていない」と答えたときは、それを表示する（記録には AI の読取値のまま残す）
-    read: i.blank && i.read === null ? BLANK_READ_LABEL : i.read,
+    read: i.read,
+    readBlank: i.blank,
   }));
   return {
     inspectionId,

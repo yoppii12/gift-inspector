@@ -160,6 +160,8 @@ describe('表書き「無地」と名入れなし（#51）', () => {
     ['文字が読めた（印字されている）', blankRead({omotegaki: '御祝'}), 'NG'],
     ['「印字なし」と答えたのに文字も読んでいる', blankRead({omotegaki: '寿'}), 'NG'],
     ['「印字なし」と答えていない', blankRead({omotegaki_blank: false}), 'UNREADABLE'],
+    ['「印字なし」と答えつつ記号だけ返した', blankRead({omotegaki: '・'}), 'UNREADABLE'],
+    ['「印字なし」と答えつつ空白を返した', blankRead({omotegaki: '　'}), 'UNREADABLE'],
     ['のし紙が写っていない', blankRead({noshi_present: false}), 'NG'],
   ] as const)('無地: %s は OK にしない（%s）', (_l, read, result) => {
     expect(judgeItem('omotegaki', BLANK, read).result).toBe(result);
@@ -188,7 +190,8 @@ describe('表書き「無地」と名入れなし（#51）', () => {
             BLANK,
             blankRead({omotegaki, omotegaki_blank, noshi_present})
           );
-          const okAllowed = noshi_present && omotegaki_blank && normalizeText(omotegaki) === null;
+          // OK にしてよいのは「のしが写っていて、印字なしと答え、読取値を何も返していない」ときだけ
+          const okAllowed = noshi_present && omotegaki_blank && omotegaki === null;
           if (!okAllowed) expect(item.result, JSON.stringify(item)).not.toBe('OK');
         }
       }

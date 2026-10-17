@@ -131,14 +131,17 @@ export function judgeItem(key: ItemKey, expected: Expected, read: AiReadResult):
   if (!isPresent(key, read)) return {...base, result: 'NG', reason: 'NOT_PRESENT'};
   let matched: boolean;
   if (expectsBlank(key, normalizedExpected)) {
-    // 無地: 文字が読めたら印字されている（不一致）。「印字なし」と答え、文字も読んでいないときだけ一致とする
+    // 無地: 文字が読めたら印字されている（不一致）。記号・空白だけでも何か返したなら、印字なしとは言えない。
+    // 「印字なし」と答え、読取値を何も返していない（null）ときだけ一致とする
     if (normalizedRead !== null) return {...base, result: 'NG', reason: 'MISMATCH'};
-    if (!blank) return {...base, result: 'UNREADABLE', reason: 'TEXT_UNREADABLE'};
+    if (readRaw !== null || !blank) {
+      return {...base, result: 'UNREADABLE', reason: 'TEXT_UNREADABLE'};
+    }
     matched = true;
   } else {
     // 無地でない正解に「印字なし」と答えた: 印字漏れの疑い。読み取れずではなく不一致にする
-    if (blank && normalizedRead === null) return {...base, result: 'NG', reason: 'MISMATCH'};
-    // 「印字なし」と答えたのに文字も読んでいる（応答が矛盾）: どちらを信じても OK にしない
+    if (blank && readRaw === null) return {...base, result: 'NG', reason: 'MISMATCH'};
+    // 「印字なし」と答えたのに何か読んでいる（応答が矛盾）: どちらを信じても OK にしない
     if (blank) return {...base, result: 'UNREADABLE', reason: 'TEXT_UNREADABLE'};
     if (normalizedRead === null) return {...base, result: 'UNREADABLE', reason: 'TEXT_UNREADABLE'};
     matched = normalizedRead === normalizedExpected;
