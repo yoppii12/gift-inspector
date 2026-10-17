@@ -147,5 +147,8 @@ function parseManualExpected(fields: Record<string, string>): Expected {
     noshiType: noshiRequired ? (noshiType as MizuhikiType | null) : null,
     noshiRequired,
     cardRequired,
+    // 資材・手提げ袋の参考判定は、手入力モードでは対象外
+    bagType: null,
+    carrierBag: null,
   };
 }

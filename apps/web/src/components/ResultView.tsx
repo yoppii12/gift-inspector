@@ -269,22 +269,41 @@ function Compare({
   );
 }
 
+const REFERENCE_STATUS_LABELS = {MATCH: '一致', MISMATCH: '不一致', UNKNOWN: '判別できず'} as const;
+
+/** 参考判定の一覧（#53）。登録と読み取りを並べる。不一致は太字にする（警告は上部に別途表示） */
 function ReferenceRows({result}: {result: InspectionResult}) {
-  const r = result.reference;
-  const yesNo = (v: boolean | null) => (v === null ? '—' : v ? 'あり' : 'なし');
-  const rows = [
-    ['のし', yesNo(r.noshiPresent)],
-    ['メッセージカード', yesNo(r.cardPresent)],
-    ['水引', `${r.mizuhikiRead ?? '—'}（登録: ${r.mizuhikiExpected ?? 'なし'}）`],
-  ];
+  // 以前の形式で保存された結果（再送）では一覧がない
+  const references = result.references ?? [];
   return (
-    <Box sx={{display: 'grid', gridTemplateColumns: '120px 1fr', rowGap: 0.75}}>
-      {rows.map(([label, value]) => (
-        <Box key={label} sx={{display: 'contents'}}>
+    <Box
+      sx={{
+        display: 'grid',
+        gridTemplateColumns: 'minmax(96px, auto) 1fr auto',
+        rowGap: 0.75,
+        columnGap: 1.5,
+      }}
+    >
+      {references.map(r => (
+        <Box key={r.key} sx={{display: 'contents'}} data-reference={r.key} data-status={r.status}>
           <Typography variant="body2" sx={{color: color.main60, fontWeight: 400}}>
-            {label}
+            {r.label}
           </Typography>
-          <Typography variant="body2">{value}</Typography>
+          <Typography variant="body2" sx={{minWidth: 0, wordBreak: 'break-all'}}>
+            {r.read ?? '—'}
+            <Box component="span" sx={{color: color.main60}}>
+              （登録: {r.expected}）
+            </Box>
+          </Typography>
+          <Typography
+            variant="body2"
+            sx={{
+              fontWeight: r.status === 'MISMATCH' ? 700 : 400,
+              color: r.status === 'MATCH' ? color.main60 : color.main,
+            }}
+          >
+            {REFERENCE_STATUS_LABELS[r.status]}
+          </Typography>
         </Box>
       ))}
     </Box>

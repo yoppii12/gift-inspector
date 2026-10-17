@@ -17,6 +17,11 @@ export const MOCK_READING: AiReadResult = {
   atena: '佐藤 花子',
   card_present: true,
   card_text: 'ご出産おめでとうございます。心ばかりの品をお贈りします。',
+  paper_flat_bag_present: false,
+  drawstring_bag_present: false,
+  seal_present: false,
+  manual_present: false,
+  carrier_bag_present: false,
 };
 
 const MOCK_LATENCY_MS = 800;

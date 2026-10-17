@@ -14,7 +14,15 @@ import {classifyResponse, type GuardDeps, guardedRead} from '../src/ai/guard';
 import {MOCK_READING, MockProvider, type MockStep} from '../src/ai/providers/mock';
 import {SYSTEM_PROMPT, TOOL_INPUT_SCHEMA, USER_PROMPT} from '../src/ai/prompt';
 import {ProviderError} from '../src/ai/types';
-import {combineItems, type Expected, judge, judgeItem, type ReadOutcome} from '../src/judge/judge';
+import {
+  combineItems,
+  type Expected,
+  judge,
+  judgeItem,
+  type ReadOutcome,
+  referenceItems,
+  refWarnings,
+} from '../src/judge/judge';
 import {normalizeText, VARIANT_TABLE} from '../src/judge/normalize';
 
 const EXPECTED: Expected = {
@@ -24,6 +32,8 @@ const EXPECTED: Expected = {
   noshiType: '花結び',
   noshiRequired: true,
   cardRequired: true,
+  bagType: null,
+  carrierBag: null,
 };
 const READ: AiReadResult = {...MOCK_READING};
 const OFF = {refMismatchBlocksOk: false};
@@ -216,6 +226,85 @@ describe('表書き「無地」と名入れなし（#51）', () => {
     expect(j.overall).toBe('UNREADABLE');
     expect(j.items?.find(i => i.key === 'atena')?.result).toBe('SKIP');
     expect(j.items?.find(i => i.key === 'omotegaki')?.result).toBe('UNREADABLE');
+  });
+});
+
+describe('ラッピング資材・手提げ袋の参考判定（#53）', () => {
+  const materials = (patch: Partial<AiReadResult>): AiReadResult => ({...READ, ...patch});
+
+  it.each([
+    ['紙平袋', {paper_flat_bag_present: true, seal_present: true}, []],
+    ['紙平袋', {}, ['BAG_MISSING', 'SEAL_MISSING']],
+    ['紙平袋', {paper_flat_bag_present: true}, ['SEAL_MISSING']],
+    ['紙平袋', {drawstring_bag_present: true, seal_present: true}, ['BAG_MISMATCH']],
+    [
+      '紙平袋',
+      {paper_flat_bag_present: true, drawstring_bag_present: true, seal_present: true},
+      ['BAG_MISMATCH'],
+    ],
+    ['布巾着袋', {drawstring_bag_present: true, manual_present: true}, []],
+    ['布巾着袋', {drawstring_bag_present: true}, ['MANUAL_MISSING']],
+    ['なし', {}, []],
+    ['なし', {paper_flat_bag_present: true}, ['BAG_UNEXPECTED']],
+  ] as const)('袋の登録が %s で %j なら警告 %j', (bagType, patch, warnings) => {
+    expect(refWarnings({...EXPECTED, bagType}, materials(patch))).toEqual(warnings);
+  });
+
+  it('手提げ袋: 登録ありで写っていない・登録なしで写っている と警告', () => {
+    expect(refWarnings({...EXPECTED, carrierBag: true}, materials({}))).toEqual([
+      'CARRIER_BAG_MISSING',
+    ]);
+    expect(
+      refWarnings({...EXPECTED, carrierBag: false}, materials({carrier_bag_present: true}))
+    ).toEqual(['CARRIER_BAG_UNEXPECTED']);
+    expect(
+      refWarnings({...EXPECTED, carrierBag: true}, materials({carrier_bag_present: true}))
+    ).toEqual([]);
+  });
+
+  it('登録が未設定（null）なら、資材が写っていても警告しない（対象外）', () => {
+    const all = materials({
+      paper_flat_bag_present: true,
+      drawstring_bag_present: true,
+      seal_present: true,
+      manual_present: true,
+      carrier_bag_present: true,
+    });
+    expect(refWarnings(EXPECTED, all)).toEqual([]);
+    expect(referenceItems(EXPECTED, all).map(r => r.key)).toEqual(['noshi', 'mizuhiki', 'card']);
+  });
+
+  it('参考判定の一覧: 登録された項目だけを、登録・読み取り・状態で返す', () => {
+    const refs = referenceItems(
+      {...EXPECTED, bagType: '紙平袋', carrierBag: false},
+      materials({paper_flat_bag_present: true})
+    );
+    expect(refs.map(r => [r.key, r.expected, r.read, r.status])).toEqual([
+      ['noshi', 'あり', 'あり', 'MATCH'],
+      ['mizuhiki', '花結び', '花結び', 'MATCH'],
+      ['card', 'あり', 'あり', 'MATCH'],
+      ['bag', '紙平袋', '紙平袋', 'MATCH'],
+      ['seal', 'あり', 'なし', 'MISMATCH'],
+      ['carrier_bag', 'なし', 'なし', 'MATCH'],
+    ]);
+  });
+
+  it('AI が読み取れなかったときは、読み取りなし・判別できず', () => {
+    const refs = referenceItems({...EXPECTED, bagType: '布巾着袋', carrierBag: true}, null);
+    expect(refs.every(r => r.read === null && r.status === 'UNKNOWN')).toBe(true);
+  });
+
+  it('のしが写っていない・水引が不明なら、水引は判別できず', () => {
+    const missing = referenceItems(EXPECTED, materials({noshi_present: false}));
+    expect(missing.find(r => r.key === 'mizuhiki')).toMatchObject({read: null, status: 'UNKNOWN'});
+    const unknown = referenceItems(EXPECTED, materials({mizuhiki_type: '不明'}));
+    expect(unknown.find(r => r.key === 'mizuhiki')?.status).toBe('UNKNOWN');
+  });
+
+  it('資材の警告は主判定を変えない（既定）。REF_MISMATCH_BLOCKS_OK=true なら NG（REF_MISMATCH）', () => {
+    const expected: Expected = {...EXPECTED, bagType: '紙平袋', carrierBag: true};
+    expect(judge(expected, ok(READ), OFF)).toMatchObject({overall: 'OK'});
+    expect(judge(expected, ok(READ), ON)).toMatchObject({overall: 'NG', ngReason: 'REF_MISMATCH'});
   });
 });
 

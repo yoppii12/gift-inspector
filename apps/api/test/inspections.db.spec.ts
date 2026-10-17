@@ -110,6 +110,39 @@ describe.skipIf(!enabled)('POST /api/inspections（MySQL）', () => {
     expect(r?.image_sha256).toHaveLength(64);
   });
 
+  it('資材の登録があるオーダーは、参考判定の一覧と警告を返し、登録を記録する。主判定は変わらない（#53）', async () => {
+    const code = 'GIFT-DEMO-990';
+    await pool.query(
+      `INSERT INTO demo_orders (order_code, sort_order, omotegaki, atena, card_text, noshi_type,
+         noshi_required, card_required, bag_type, carrier_bag)
+       VALUES (?, 990, '御祝', '佐藤 花子', 'ご出産おめでとうございます。心ばかりの品をお贈りします。',
+         '花結び', 1, 1, '紙平袋', 1)`,
+      [code]
+    );
+    try {
+      const {app} = setup();
+      const id = randomUUID();
+      const body = JSON.parse((await post(app, id, code)).payload) as InspectionResult;
+      expect(body.overall).toBe('OK');
+      expect(body.refWarnings).toEqual(['BAG_MISSING', 'SEAL_MISSING', 'CARRIER_BAG_MISSING']);
+      expect(body.references.map(r => [r.key, r.status])).toEqual([
+        ['noshi', 'MATCH'],
+        ['mizuhiki', 'MATCH'],
+        ['card', 'MATCH'],
+        ['bag', 'MISMATCH'],
+        ['seal', 'MISMATCH'],
+        ['carrier_bag', 'MISMATCH'],
+      ]);
+      expect(await row(id)).toMatchObject({expected_bag_type: '紙平袋', expected_carrier_bag: 1});
+    } finally {
+      await pool.query(
+        'DELETE FROM inspections WHERE order_id = (SELECT id FROM demo_orders WHERE order_code = ?)',
+        [code]
+      );
+      await pool.query('DELETE FROM demo_orders WHERE order_code = ?', [code]);
+    }
+  });
+
   it('デモの意図的 NG（表書き）は 200 / NG で、正解と読取値が並ぶ', async () => {
     const {app} = setup();
     const res = await post(app, randomUUID(), 'GIFT-DEMO-003');

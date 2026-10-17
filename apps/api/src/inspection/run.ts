@@ -8,6 +8,7 @@
  * 判定が行われなかった場合は AppError を投げる（ルートがエラー応答にする）。
  */
 import {
+  type AiReadResult,
   AppError,
   type ErrorCode,
   type InspectionItem,
@@ -33,7 +34,13 @@ import {
 } from '../db/inspections';
 import {findOrderWithId} from '../db/orders';
 import type {Db} from '../db/pool';
-import {assertValidExpected, type Expected, judge, type Judgement} from '../judge/judge';
+import {
+  assertValidExpected,
+  type Expected,
+  judge,
+  type Judgement,
+  referenceItems,
+} from '../judge/judge';
 import type {Notifier} from '../lib/notifier';
 import {inspectImage, saveImage, sha256} from '../storage/images';
 
@@ -119,6 +126,8 @@ export async function runInspection(
       noshiType: order.noshiType,
       noshiRequired: order.noshiRequired,
       cardRequired: order.cardRequired,
+      bagType: order.bagType,
+      carrierBag: order.carrierBag,
     };
   }
   // AI を呼ぶ前に正解データを検査する（不備なら CONFIG_INVALID_EXPECTED）
@@ -177,13 +186,8 @@ export async function runInspection(
     const judgement = judge(expected, read, {
       refMismatchBlocksOk: deps.config.REF_MISMATCH_BLOCKS_OK,
     });
-    const result = toResult(
-      inspectionId,
-      target,
-      judgement,
-      read.status === 'ok' ? read.data : null,
-      expected
-    );
+    const readData = read.status === 'ok' ? read.data : null;
+    const result = toResult(inspectionId, target, judgement, readData, expected);
     const adopted = attempts[attempts.length - 1];
 
     // --- 5. 確定
@@ -194,9 +198,9 @@ export async function runInspection(
         attempts,
         rawResponse: adopted?.raw ?? null,
         read: {
-          noshiPresent: result?.reference.noshiPresent ?? null,
-          cardPresent: result?.reference.cardPresent ?? null,
-          noshiType: result?.reference.mizuhikiRead ?? null,
+          noshiPresent: readData?.noshi_present ?? null,
+          cardPresent: readData?.card_present ?? null,
+          noshiType: readData?.mizuhiki_type ?? null,
         },
         tokensIn: sum(attempts.map(a => a.tokensIn)),
         tokensOut: sum(attempts.map(a => a.tokensOut)),
@@ -299,7 +303,7 @@ function toResult(
   inspectionId: string,
   target: ReplayTarget,
   j: Judgement,
-  read: {noshi_present: boolean; card_present: boolean; mizuhiki_type: string} | null,
+  read: AiReadResult | null,
   expected: Expected
 ): Omit<InspectionResult, 'replayed' | 'completedAt'> | null {
   if (j.overall === 'ERROR' || j.items === null) return null;
@@ -321,12 +325,7 @@ function toResult(
     unreadableReason: j.unreadableReason,
     items,
     refWarnings: j.refWarnings,
-    reference: {
-      noshiPresent: read?.noshi_present ?? null,
-      cardPresent: read?.card_present ?? null,
-      mizuhikiRead: read?.mizuhiki_type ?? null,
-      mizuhikiExpected: expected.noshiType,
-    },
+    references: referenceItems(expected, read),
   };
 }
 
@@ -346,7 +345,9 @@ function sameTarget(stored: StoredInspection, target: ReplayTarget): boolean {
     a.cardText === b.cardText &&
     a.noshiType === b.noshiType &&
     a.noshiRequired === b.noshiRequired &&
-    a.cardRequired === b.cardRequired
+    a.cardRequired === b.cardRequired &&
+    a.bagType === b.bagType &&
+    a.carrierBag === b.carrierBag
   );
 }
 

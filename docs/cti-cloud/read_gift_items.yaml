@@ -28,7 +28,7 @@ paths:
             input:
               image: $image
               system: |-
-                あなたはギフト出荷の検品で、写真に写った「のし」と「メッセージカード」の印刷文字を書き写す担当です。
+                あなたはギフト出荷の検品で、写真に写った「のし」と「メッセージカード」の印刷文字を書き写し、写っているラッピング資材を確かめる担当です。
 
                 - 写真に写っている文字を、見えたとおりに書き写してください。推測・補完・修正はしないでください。
                 - 読み取れない、または写っていない項目は null にしてください。一部しか読めない場合も、読めた部分だけを書かず null にしてください。
@@ -41,7 +41,12 @@ paths:
                 - omotegaki_blank: 水引の上（表書きの位置）に何も印字されていないことを、はっきり確認できたときだけ true。文字らしきもの・かすれ・にじみが見えるとき、ぼやけて判断できないとき、のし紙が写っていないときは false。「読み取れない」は「印字されていない」ではない。omotegaki に値を入れたときは必ず false
                 - atena: のしの水引の下に印字された名入れ（印字されていなければ null）
                 - card_present: メッセージカードが写っているか
-                - card_text: メッセージカードの印刷文字（改行は除いて1行で）
+                - card_text: メッセージカードに印刷されたメッセージの文面（改行は除いて1行で。デザインとして大きく印刷された見出しや飾り文字、隅の英数字の識別コードは含めない）
+                - paper_flat_bag_present: グレーの紙の平袋（封筒型のギフト袋）が写っているか
+                - drawstring_bag_present: グレーの布の巾着袋（紐で口を閉じる袋）が写っているか
+                - seal_present: 袋の封に使う丸いシールが写っているか（台紙に付いたままのものを含む）
+                - manual_present: 取扱説明書（白い紙に注意書きが印刷されたもの）が写っているか
+                - carrier_bag_present: 持ち手の付いた黒い紙の手提げ袋が写っているか
 
                 結果は指定された JSON の形式だけで返してください。Markdown、コードブロック、説明文、指定外の項目は含めないでください。
 
@@ -79,10 +84,25 @@ paths:
                         type: boolean
                         description: メッセージカードが写っているか
                       card_text:
-                        description: メッセージカードの印刷文字（改行なしの1行）。読み取れない・写っていなければ null
+                        description: メッセージカードに印刷されたメッセージの文面（改行なしの1行。デザインの見出し・識別コードは含めない）。読み取れない・写っていなければ null
                         anyOf:
                           - type: string
                           - type: 'null'
+                      paper_flat_bag_present:
+                        type: boolean
+                        description: グレーの紙の平袋（封筒型のギフト袋）が写っているか
+                      drawstring_bag_present:
+                        type: boolean
+                        description: グレーの布の巾着袋（紐で口を閉じる袋）が写っているか
+                      seal_present:
+                        type: boolean
+                        description: 袋の封に使う丸いシールが写っているか（台紙に付いたままのものを含む）
+                      manual_present:
+                        type: boolean
+                        description: 取扱説明書（白い紙に注意書きが印刷されたもの）が写っているか
+                      carrier_bag_present:
+                        type: boolean
+                        description: 持ち手の付いた黒い紙の手提げ袋が写っているか
                     required:
                       - noshi_present
                       - mizuhiki_type
@@ -91,6 +111,11 @@ paths:
                       - atena
                       - card_present
                       - card_text
+                      - paper_flat_bag_present
+                      - drawstring_bag_present
+                      - seal_present
+                      - manual_present
+                      - carrier_bag_present
                     additionalProperties: false
 
         - exit:

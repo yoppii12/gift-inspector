@@ -47,12 +47,10 @@ function result(overrides: Partial<InspectionResult> = {}): InspectionResult {
       },
     ],
     refWarnings: [],
-    reference: {
-      noshiPresent: true,
-      cardPresent: true,
-      mizuhikiRead: '花結び',
-      mizuhikiExpected: '花結び',
-    },
+    references: [
+      {key: 'noshi', label: 'のし', expected: 'あり', read: 'あり', status: 'MATCH'},
+      {key: 'mizuhiki', label: '水引', expected: '花結び', read: '花結び', status: 'MATCH'},
+    ],
     completedAt: '2026-10-07T00:00:00.000Z',
     replayed: false,
     ...overrides,
@@ -206,6 +204,8 @@ describe('開発用の手入力モード', () => {
     noshiType: '花結び' as const,
     noshiRequired: true,
     cardRequired: false,
+    bagType: null,
+    carrierBag: null,
   };
 
   it('正解の項目を image より前に入れて送る', async () => {

@@ -1,7 +1,7 @@
 import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 
-import {MIZUHIKI_TYPES, ORDER_CODE_PATTERN} from '@gift-inspector/shared';
+import {BAG_TYPES, MIZUHIKI_TYPES, ORDER_CODE_PATTERN} from '@gift-inspector/shared';
 import {z} from 'zod';
 
 import {CARD_TEXT_MAX} from './noshi';
@@ -25,6 +25,9 @@ const orderSchema = z.strictObject({
     ...contentSchema,
     noshiRequired: z.boolean(),
     cardRequired: z.boolean(),
+    // 参考判定（#53）。省略・null は対象外
+    bagType: z.enum(BAG_TYPES).nullable().default(null),
+    carrierBag: z.boolean().nullable().default(null),
   }),
   printed: z.strictObject(contentSchema),
   expected: z.enum(['OK', 'NG']),
