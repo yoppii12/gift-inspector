@@ -107,24 +107,34 @@ export interface Sheet {
   /** 紙の中に描く濃い印（文字・水引の代わり） */
   marks?: boolean;
   rgb?: [number, number, number];
+  /** 台形にする度合い（0〜1）。長辺の一端に向かって短辺が (1 - taper) 倍まで縮む（斜めからの撮影） */
+  taper?: number;
 }
 
 /** 1600×1200 のグレーの背景に、白い長方形（回転可）を描いた JPEG */
-export function photo(sheets: Sheet[], width = 1600, height = 1200): Buffer {
+export function photo(
+  sheets: Sheet[],
+  width = 1600,
+  height = 1200,
+  background?: [number, number, number]
+): Buffer {
   const data = Buffer.alloc(width * height * 4);
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const i = (y * width + x) * 4;
       // カーペットのような少しまだらなグレー
       const noise = ((x * 7 + y * 13) % 17) - 8;
-      let rgb: [number, number, number] = [96 + noise, 98 + noise, 104 + noise];
+      let rgb: [number, number, number] = background
+        ? [background[0] + noise, background[1] + noise, background[2] + noise]
+        : [96 + noise, 98 + noise, 104 + noise];
       for (const s of sheets) {
         const t = ((s.angle ?? 0) * Math.PI) / 180;
         const dx = x - s.cx;
         const dy = y - s.cy;
         const u = dx * Math.cos(t) + dy * Math.sin(t);
         const v = -dx * Math.sin(t) + dy * Math.cos(t);
-        if (Math.abs(u) <= s.long / 2 && Math.abs(v) <= s.short / 2) {
+        const halfShort = (s.short / 2) * (1 - (s.taper ?? 0) * (u / s.long + 0.5));
+        if (Math.abs(u) <= s.long / 2 && Math.abs(v) <= halfShort) {
           rgb = s.rgb ?? [244, 243, 240];
           // 中央付近に水引の線と、表書きの文字の代わりの濃い四角
           if (s.marks && (Math.abs(v) < 3 || (Math.abs(u) < 8 && v < -10 && v > -40))) {

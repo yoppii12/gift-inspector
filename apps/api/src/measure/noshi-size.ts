@@ -3,7 +3,9 @@
  * 長短2サイズは高さが共通で長さだけが違うため、のし紙（白い長方形）の輪郭を検出し、
  * 最小外接長方形の縦横比（長辺÷短辺）で見分ける。AI は使わない。
  *
- * 判定できないとき（のし紙が見つからない・複数ある・境目に近い・JPEG 以外）は size = null を返す。
+ * 判定できないとき（のし紙が見つからない・複数ある・縁で切れている・境目に近い・背景が明るい・JPEG 以外・大きすぎる）は
+ * size = null を返す。誤りは「長い」を「短い」と読む向きに偏る（紙の端が切れる・影がかかると縦横比が小さくなる）ため、
+ * 登録「長い」で「短い」と出たときは撮り直して確かめる。
  * 「判定できず」は参考判定の警告になるだけで、主判定（OK/NG）には影響しない。
  */
 import jpeg from 'jpeg-js';
@@ -15,17 +17,45 @@ export const LONG_MIN_RATIO = 3.35;
 export const SHORT_MAX_RATIO = 3.15;
 /** のし紙とみなす縦横比の範囲（取扱説明書・カードなど縦横比の小さい白い紙を除く） */
 const CANDIDATE_RATIO = {min: 2.5, max: 4.2};
-/** 外接長方形をどれだけ埋めていれば長方形とみなすか（くっついた紙・影を除く） */
-const MIN_RECTANGULARITY = 0.9;
+/**
+ * 外接長方形をどれだけ埋めていれば長方形とみなすか。くっついた紙や、斜めから撮って台形に写った紙を除く
+ * （対辺の長さが 0.9 倍の台形で約 0.95。受領写真ののし紙は 0.98〜0.99）
+ */
+const MIN_RECTANGULARITY = 0.95;
 /** 画像全体に対する面積の下限（細かいゴミを除く） */
 const MIN_AREA_FRACTION = 0.01;
+/** これより大きい白い塊は、白い箱・明るい台など背景とみなす（のし紙は画像の一部に写る前提） */
+const MAX_AREA_FRACTION = 0.5;
+/** 画像の縁からこの画素数（作業画像）以内に触れている塊は、紙の一部が写っていないので測らない */
+const EDGE_MARGIN = 4;
 /** 計測に使う画像の長辺（縮小してから処理する） */
 const WORK_LONG_EDGE = 800;
+/** 計測する画像の画素数の上限（端末は長辺 1600px に縮めて送る。大きすぎる画像は復号しない） */
+const MAX_PIXELS = 4_000_000;
 /** 白い紙とみなす画素: 明るさ（0〜255）の下限と、彩度（0〜1）の上限 */
 const WHITE = {minValue: 175, maxSaturation: 0.24};
 
 export type NoshiSizeReason =
-  'MEASURED' | 'BORDERLINE' | 'NOT_FOUND' | 'MULTIPLE' | 'UNSUPPORTED_FORMAT';
+  | 'MEASURED'
+  | 'BORDERLINE'
+  | 'NOT_FOUND'
+  | 'MULTIPLE'
+  /** 縁に触れていて全体が写っていない */
+  | 'TOUCHES_EDGE'
+  /** 背景が明るく、のし紙と見分けられない（白い箱の上など） */
+  | 'BACKGROUND_TOO_BRIGHT'
+  | 'UNSUPPORTED_FORMAT'
+  | 'TOO_LARGE'
+  /** 計測中の例外（呼び出し側で付ける） */
+  | 'ERROR';
+
+/** 候補ごとの値（記録・しきい値の調整用） */
+export interface NoshiCandidate {
+  ratio: number;
+  rectangularity: number;
+  areaFraction: number;
+  touchesEdge: boolean;
+}
 
 export interface NoshiSizeMeasurement {
   /** 判定できたときだけ入る */
@@ -33,40 +63,71 @@ export interface NoshiSizeMeasurement {
   /** のし紙が1枚だけ見つかったときの縦横比（長辺÷短辺） */
   ratio: number | null;
   reason: NoshiSizeReason;
-  /** 見つかった候補の数（記録・調整用） */
-  candidates: number;
+  /** 一定以上の大きさの白い塊（のし紙の候補）の数と値 */
+  candidates: NoshiCandidate[];
 }
 
-export function measureNoshiSize(image: Buffer, mime: string): NoshiSizeMeasurement {
-  if (mime !== 'image/jpeg') {
-    return {size: null, ratio: null, reason: 'UNSUPPORTED_FORMAT', candidates: 0};
+const round = (v: number) => Math.round(v * 1000) / 1000;
+
+/**
+ * @param dims 画像の寸法（storage/images.ts の検査で分かっていれば渡す。大きすぎる画像は復号しない）
+ */
+export function measureNoshiSize(
+  image: Buffer,
+  mime: string,
+  dims: {width: number | null; height: number | null} = {width: null, height: null}
+): NoshiSizeMeasurement {
+  const none = (reason: NoshiSizeReason, candidates: NoshiCandidate[] = []) => ({
+    size: null,
+    ratio: null,
+    reason,
+    candidates,
+  });
+  if (mime !== 'image/jpeg') return none('UNSUPPORTED_FORMAT');
+  if (dims.width !== null && dims.height !== null && dims.width * dims.height > MAX_PIXELS) {
+    return none('TOO_LARGE');
   }
   const decoded = jpeg.decode(image, {
     useTArray: true,
-    maxResolutionInMP: 40,
-    maxMemoryUsageInMB: 256,
+    maxResolutionInMP: MAX_PIXELS / 1_000_000,
+    maxMemoryUsageInMB: 64,
   });
   const {mask, width, height} = whiteMask(decoded.data, decoded.width, decoded.height);
   const cleaned = close(open(mask, width, height, 2), width, height, 3);
-  const ratios = components(cleaned, width, height)
-    .filter(c => c.area >= width * height * MIN_AREA_FRACTION)
-    .map(c => minAreaRect(c.boundary, c.area))
-    .filter(
-      r =>
-        r.rectangularity >= MIN_RECTANGULARITY &&
-        r.ratio >= CANDIDATE_RATIO.min &&
-        r.ratio <= CANDIDATE_RATIO.max
-    )
-    .map(r => r.ratio);
+  const total = width * height;
+  const candidates: NoshiCandidate[] = components(cleaned, width, height)
+    .filter(c => c.area >= total * MIN_AREA_FRACTION)
+    .map(c => ({
+      ...minAreaRect(c.boundary, c.area),
+      areaFraction: round(c.area / total),
+      touchesEdge: c.touchesEdge,
+    }));
 
-  if (ratios.length === 0) return {size: null, ratio: null, reason: 'NOT_FOUND', candidates: 0};
-  if (ratios.length > 1) {
-    return {size: null, ratio: null, reason: 'MULTIPLE', candidates: ratios.length};
+  if (candidates.some(c => c.areaFraction > MAX_AREA_FRACTION)) {
+    return none('BACKGROUND_TOO_BRIGHT', candidates);
   }
-  const ratio = Math.round((ratios[0] as number) * 1000) / 1000;
-  if (ratio >= LONG_MIN_RATIO) return {size: '長い', ratio, reason: 'MEASURED', candidates: 1};
-  if (ratio <= SHORT_MAX_RATIO) return {size: '短い', ratio, reason: 'MEASURED', candidates: 1};
-  return {size: null, ratio, reason: 'BORDERLINE', candidates: 1};
+  const shaped = candidates.filter(
+    c =>
+      c.rectangularity >= MIN_RECTANGULARITY &&
+      c.ratio >= CANDIDATE_RATIO.min &&
+      c.ratio <= CANDIDATE_RATIO.max
+  );
+  const whole = shaped.filter(c => !c.touchesEdge);
+  if (whole.length > 1) return none('MULTIPLE', candidates);
+  if (whole.length === 0) {
+    // 縁で切れた紙は、写っている部分の縦横比が小さくなり「長い」を「短い」と誤るので測らない
+    return none(candidates.some(c => c.touchesEdge) ? 'TOUCHES_EDGE' : 'NOT_FOUND', candidates);
+  }
+  const ratio = (whole[0] as NoshiCandidate).ratio;
+  const result = (size: NoshiSize | null, reason: NoshiSizeReason) => ({
+    size,
+    ratio,
+    reason,
+    candidates,
+  });
+  if (ratio >= LONG_MIN_RATIO) return result('長い', 'MEASURED');
+  if (ratio <= SHORT_MAX_RATIO) return result('短い', 'MEASURED');
+  return result(null, 'BORDERLINE');
 }
 
 /** 縮小しながら白い紙の画素を 1 にした二値画像を作る */
@@ -134,9 +195,18 @@ function close(m: Uint8Array, w: number, h: number, r: number) {
 
 interface Component {
   area: number;
+  /** 画像の縁（EDGE_MARGIN 以内）に触れている */
+  touchesEdge: boolean;
   /** 輪郭の画素（隣に背景がある画素）の座標 */
   boundary: [number, number][];
 }
+
+const NEIGHBORS = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+] as const;
 
 /** 4近傍の連結成分 */
 function components(m: Uint8Array, w: number, h: number): Component[] {
@@ -150,19 +220,18 @@ function components(m: Uint8Array, w: number, h: number): Component[] {
     label[start] = next;
     stack.push(start);
     let area = 0;
+    let touchesEdge = false;
     const boundary: [number, number][] = [];
     while (stack.length > 0) {
       const p = stack.pop() as number;
       area++;
       const x = p % w;
       const y = (p - x) / w;
+      if (x < EDGE_MARGIN || y < EDGE_MARGIN || x >= w - EDGE_MARGIN || y >= h - EDGE_MARGIN) {
+        touchesEdge = true;
+      }
       let edge = false;
-      for (const [dx, dy] of [
-        [1, 0],
-        [-1, 0],
-        [0, 1],
-        [0, -1],
-      ] as const) {
+      for (const [dx, dy] of NEIGHBORS) {
         const nx = x + dx;
         const ny = y + dy;
         if (nx < 0 || ny < 0 || nx >= w || ny >= h) {
@@ -181,7 +250,7 @@ function components(m: Uint8Array, w: number, h: number): Component[] {
       }
       if (edge) boundary.push([x, y]);
     }
-    result.push({area, boundary});
+    result.push({area, touchesEdge, boundary});
   }
   return result;
 }
@@ -238,7 +307,7 @@ function minAreaRect(boundary: [number, number][], area: number) {
   const long = Math.max(best.w, best.h);
   const short = Math.min(best.w, best.h);
   return {
-    ratio: short > 0 ? long / short : 0,
-    rectangularity: best.rectArea > 0 ? area / best.rectArea : 0,
+    ratio: round(short > 0 ? long / short : 0),
+    rectangularity: round(best.rectArea > 0 ? area / best.rectArea : 0),
   };
 }

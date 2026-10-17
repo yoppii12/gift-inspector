@@ -43,7 +43,7 @@ import {
   NO_MEASUREMENTS,
   referenceItems,
 } from '../judge/judge';
-import {measureNoshiSize} from '../measure/noshi-size';
+import {measureNoshiSize, type NoshiSizeMeasurement} from '../measure/noshi-size';
 import type {Notifier} from '../lib/notifier';
 import {inspectImage, saveImage, sha256} from '../storage/images';
 
@@ -188,10 +188,11 @@ export async function runInspection(
     );
     attempts = read.attempts;
     // のし紙の大きさの登録があるオーダーだけ計測する（参考判定の対象外なら計測しない）
-    const measurements =
+    const noshiSize =
       expected.noshiRequired && expected.noshiSize !== null
-        ? measure(input.image, image.mime, inspectionId, deps.logger)
-        : NO_MEASUREMENTS;
+        ? measure(input.image, image, inspectionId, deps.logger)
+        : null;
+    const measurements: Measurements = noshiSize ? {noshiSize} : NO_MEASUREMENTS;
     const judgement = judge(
       expected,
       read,
@@ -214,7 +215,7 @@ export async function runInspection(
           cardPresent: readData?.card_present ?? null,
           noshiType: readData?.mizuhiki_type ?? null,
         },
-        measurements,
+        measurements: {noshiSize},
         tokensIn: sum(attempts.map(a => a.tokensIn)),
         tokensOut: sum(attempts.map(a => a.tokensOut)),
         durationMs: now() - startedAt,
@@ -273,18 +274,19 @@ export async function runInspection(
  */
 function measure(
   image: Buffer,
-  mime: string,
+  info: {mime: string; width: number | null; height: number | null},
   inspectionId: string,
   logger: FastifyBaseLogger
-): Measurements {
+): NoshiSizeMeasurement {
   try {
-    return {noshiSize: measureNoshiSize(image, mime)};
+    return measureNoshiSize(image, info.mime, info);
   } catch (err: unknown) {
+    // 形式の検査を通った JPEG が復号できないのは想定外。スタックごと残す
     logger.warn(
-      {inspectionId, errorCode: 'SYS_UNEXPECTED', err: errorMessage(err)},
+      {inspectionId, errorCode: 'SYS_UNEXPECTED', err},
       'のし紙の縦横比を計測できませんでした（参考判定は「判定できず」になります）'
     );
-    return {noshiSize: {size: null, ratio: null, reason: 'ERROR'}};
+    return {size: null, ratio: null, reason: 'ERROR', candidates: []};
   }
 }
 

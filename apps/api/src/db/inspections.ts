@@ -5,7 +5,8 @@ import type {ErrorCode} from '@gift-inspector/shared';
 import type {ResultSetHeader, RowDataPacket} from 'mysql2/promise';
 
 import type {AttemptRecord} from '../ai/guard';
-import type {Judgement, Measurements} from '../judge/judge';
+import type {Judgement} from '../judge/judge';
+import type {NoshiSizeMeasurement} from '../measure/noshi-size';
 import {type Db, withDb} from './pool';
 
 export interface PendingInspection {
@@ -194,8 +195,8 @@ export interface Completion {
     cardPresent: boolean | null;
     noshiType: string | null;
   };
-  /** 参考判定のための計測（のし紙の縦横比） */
-  measurements: Measurements;
+  /** 参考判定のための計測（のし紙の縦横比）。計測しなかったときは null */
+  measurements: {noshiSize: NoshiSizeMeasurement | null};
   tokensIn: number | null;
   tokensOut: number | null;
   durationMs: number;
@@ -235,6 +236,7 @@ export async function completeInspection(
           reason_omotegaki = ?, reason_atena = ?, reason_card = ?,
           ref_warnings = CAST(? AS JSON), judge_detail = CAST(? AS JSON),
           noshi_aspect_ratio = ?, noshi_size_measured = ?, noshi_size_reason = ?,
+          noshi_size_detail = CAST(? AS JSON),
           completed_at = CURRENT_TIMESTAMP(3), duration_ms = ?
         WHERE inspection_id = ? AND status = 'PENDING'`,
       [
@@ -264,6 +266,9 @@ export async function completeInspection(
         c.measurements.noshiSize?.ratio ?? null,
         c.measurements.noshiSize?.size ?? null,
         c.measurements.noshiSize?.reason ?? null,
+        JSON.stringify(
+          c.measurements.noshiSize ? {candidates: c.measurements.noshiSize.candidates} : null
+        ),
         c.durationMs,
         inspectionId,
       ]

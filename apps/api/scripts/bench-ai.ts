@@ -101,7 +101,8 @@ for (const arg of positionals) {
   const order =
     orders.find(o => o.orderCode === orderCode) ?? fail(`オーダーがありません: ${orderCode}`);
   const image = readFileSync(path ?? fail(`画像パスがありません: ${arg}`));
-  const {mime} = inspectImage(image);
+  const inspected = inspectImage(image);
+  const {mime} = inspected;
 
   const totals: number[] = [];
   /** 1試行ごとの応答時間（AI 1試行のタイムアウト値を決めるのに使う） */
@@ -119,7 +120,7 @@ for (const arg of positionals) {
     );
     const totalMs = Date.now() - started;
     // のし紙の縦横比（画像処理。AI の試行ごとには変わらないが、記録をそろえるため毎回出す）
-    const noshiSize = measureNoshiSize(image, mime);
+    const noshiSize = measureNoshiSize(image, mime, inspected);
     const j = judge(order.registered, read, {refMismatchBlocksOk: false}, {noshiSize});
     const key = j.overall === 'ERROR' ? `ERROR:${j.errorCode}` : j.overall;
     overalls[key] = (overalls[key] ?? 0) + 1;

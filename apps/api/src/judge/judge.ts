@@ -22,6 +22,7 @@ import {
   type UnreadableReason,
 } from '@gift-inspector/shared';
 
+import type {NoshiSizeMeasurement} from '../measure/noshi-size';
 import {normalizeText} from './normalize';
 
 /** 判定時点の正解（オーダーの登録内容、または開発用の手入力） */
@@ -45,7 +46,7 @@ export interface Expected {
 /** AI 以外で計測した値（参考判定にだけ使う） */
 export interface Measurements {
   /** のし紙の縦横比の計測（measure/noshi-size.ts）。計測しなかった・失敗したときは null */
-  noshiSize: {size: NoshiSize | null; ratio: number | null; reason: string} | null;
+  noshiSize: Pick<NoshiSizeMeasurement, 'size' | 'ratio' | 'reason'> | null;
 }
 
 export const NO_MEASUREMENTS: Measurements = {noshiSize: null};
@@ -221,18 +222,22 @@ function seenBag(read: AiReadResult): string {
 
 const yesNo = (v: boolean) => (v ? 'あり' : 'なし');
 
-const NOSHI_SIZE_REASON_LABELS: Record<string, string> = {
+const NOSHI_SIZE_REASON_LABELS: Record<NoshiSizeMeasurement['reason'], string> = {
+  MEASURED: '',
   BORDERLINE: '長い・短いの境目に近い',
   NOT_FOUND: 'のし紙の輪郭が見つからない',
   MULTIPLE: 'のし紙らしい紙が複数ある',
+  TOUCHES_EDGE: 'のし紙が写真の端で切れている',
+  BACKGROUND_TOO_BRIGHT: '背景が明るく、のし紙と見分けられない',
   UNSUPPORTED_FORMAT: 'JPEG 以外の画像',
+  TOO_LARGE: '画像が大きすぎる',
   ERROR: '計測に失敗',
 };
 
 function noshiSizeDetail(m: Measurements['noshiSize']): string | undefined {
   if (m === null) return undefined;
   const ratio = m.ratio === null ? null : `縦横比 ${m.ratio.toFixed(2)}`;
-  const reason = m.size === null ? (NOSHI_SIZE_REASON_LABELS[m.reason] ?? m.reason) : null;
+  const reason = m.size === null ? NOSHI_SIZE_REASON_LABELS[m.reason] : null;
   return [ratio, reason].filter(Boolean).join('・') || undefined;
 }
 

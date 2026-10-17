@@ -24,6 +24,7 @@ import {
   refWarnings,
 } from '../src/judge/judge';
 import {normalizeText, VARIANT_TABLE} from '../src/judge/normalize';
+import type {NoshiSizeReason} from '../src/measure/noshi-size';
 
 const EXPECTED: Expected = {
   omotegaki: '御祝',
@@ -322,7 +323,7 @@ describe('ラッピング資材・手提げ袋の参考判定（#53）', () => {
 
 describe('のし紙の長短の参考判定（#55）', () => {
   const LONG: Expected = {...EXPECTED, noshiSize: '長い'};
-  const measured = (size: '長い' | '短い' | null, reason = 'MEASURED') => ({
+  const measured = (size: '長い' | '短い' | null, reason: NoshiSizeReason = 'MEASURED') => ({
     noshiSize: {size, ratio: size === '長い' ? 3.55 : size === '短い' ? 2.95 : null, reason},
   });
 

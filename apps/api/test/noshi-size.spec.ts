@@ -24,7 +24,8 @@ describe('のし紙の長短の計測', () => {
     ['短い（12°傾き・文字と水引あり）', {long: SHORT * 2.98, angle: 12, marks: true}, '短い'],
   ] as const)('%s → %s', (_l, sheet, size) => {
     const r = measureNoshiSize(photo([{cx: 800, cy: 600, short: SHORT, ...sheet}]), 'image/jpeg');
-    expect(r).toMatchObject({size, reason: 'MEASURED', candidates: 1});
+    expect(r).toMatchObject({size, reason: 'MEASURED'});
+    expect(r.candidates).toHaveLength(1);
   });
 
   it('境目に近い縦横比（3.25）は判定しない（BORDERLINE）', () => {
@@ -39,7 +40,7 @@ describe('のし紙の長短の計測', () => {
 
   it('のし紙らしい紙がなければ NOT_FOUND（取扱説明書のような縦横比の小さい白い紙は数えない）', () => {
     const r = measureNoshiSize(photo([{cx: 800, cy: 600, short: 300, long: 420}]), 'image/jpeg');
-    expect(r).toMatchObject({size: null, reason: 'NOT_FOUND', candidates: 0});
+    expect(r).toMatchObject({size: null, reason: 'NOT_FOUND'});
   });
 
   it('のし紙と取扱説明書が離れて写っていれば、のし紙だけを測る', () => {
@@ -61,7 +62,8 @@ describe('のし紙の長短の計測', () => {
       ]),
       'image/jpeg'
     );
-    expect(r).toMatchObject({size: null, reason: 'MULTIPLE', candidates: 2});
+    expect(r).toMatchObject({size: null, reason: 'MULTIPLE'});
+    expect(r.candidates).toHaveLength(2);
   });
 
   it('2枚が接していて1つの塊になったら、のし紙として数えない（判定しない）', () => {
@@ -72,7 +74,58 @@ describe('のし紙の長短の計測', () => {
       ]),
       'image/jpeg'
     );
+    expect(r).toMatchObject({size: null, reason: 'NOT_FOUND'});
+  });
+
+  it.each([0.1, 0.15, 0.3])(
+    '長い紙が写真の端で %s 切れていたら測らない（TOUCHES_EDGE。短いと誤らない）',
+    cut => {
+      const long = SHORT * 3.55;
+      const r = measureNoshiSize(
+        photo([{cx: 1600 - long / 2 + long * cut, cy: 600, short: SHORT, long}]),
+        'image/jpeg'
+      );
+      expect(r).toMatchObject({size: null, reason: 'TOUCHES_EDGE'});
+    }
+  );
+
+  it('白い箱・明るい台の上に置いたら測らない（BACKGROUND_TOO_BRIGHT）', () => {
+    const onBox = measureNoshiSize(
+      photo([
+        {cx: 800, cy: 600, short: 900, long: 1100},
+        {cx: 800, cy: 600, short: 200, long: 200 * 3.55, marks: true},
+      ]),
+      'image/jpeg'
+    );
+    expect(onBox).toMatchObject({size: null, reason: 'BACKGROUND_TOO_BRIGHT'});
+    const brightTable = measureNoshiSize(
+      photo([{cx: 800, cy: 600, short: SHORT, long: SHORT * 3.55}], 1600, 1200, [230, 230, 228]),
+      'image/jpeg'
+    );
+    expect(brightTable.size).toBeNull();
+  });
+
+  it('斜めから撮って台形に写った紙は測らない（長方形度が足りない）', () => {
+    const r = measureNoshiSize(
+      photo([{cx: 800, cy: 600, short: SHORT, long: SHORT * 2.95, taper: 0.15}]),
+      'image/jpeg'
+    );
     expect(r.size).toBeNull();
+  });
+
+  it('寸法の分かっている大きすぎる画像は復号しない（TOO_LARGE）', () => {
+    expect(
+      measureNoshiSize(Buffer.from([0xff, 0xd8]), 'image/jpeg', {width: 4032, height: 3024})
+    ).toMatchObject({size: null, reason: 'TOO_LARGE'});
+  });
+
+  it('候補ごとの値（縦横比・長方形度・面積比・縁）を記録用に返す', () => {
+    const r = measureNoshiSize(
+      photo([{cx: 800, cy: 600, short: SHORT, long: SHORT * 3.55}]),
+      'image/jpeg'
+    );
+    expect(r.candidates[0]).toMatchObject({touchesEdge: false});
+    expect(r.candidates[0]?.rectangularity).toBeGreaterThan(0.95);
   });
 
   it('色の付いた紙（メッセージカード等）は白い紙として数えない', () => {
