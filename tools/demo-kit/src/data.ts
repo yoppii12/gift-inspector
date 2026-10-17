@@ -1,7 +1,13 @@
 import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 
-import {BAG_TYPES, MIZUHIKI_TYPES, NOSHI_SIZES, ORDER_CODE_PATTERN} from '@gift-inspector/shared';
+import {
+  BAG_TYPES,
+  MIZUHIKI_TYPES,
+  NOSHI_SIZES,
+  OMOTEGAKI_BLANK,
+  ORDER_CODE_PATTERN,
+} from '@gift-inspector/shared';
 import {z} from 'zod';
 
 import {CARD_TEXT_MAX} from './noshi';
@@ -21,6 +27,13 @@ const contentSchema = {
 
 const orderSchema = z.strictObject({
   orderCode: z.string().regex(ORDER_CODE_PATTERN),
+  /**
+   * pseudo = 擬似のし・カードを印刷して使う（printed を PDF にする）。
+   * real = 受領した実物を使う（printed は実物の内容。PDF は作らない。setup に並べる物を書く）
+   */
+  kind: z.enum(['pseudo', 'real']).default('pseudo'),
+  /** 撮影時に作業台に並べる物（real では必須） */
+  setup: text.optional(),
   registered: z.strictObject({
     ...contentSchema,
     noshiRequired: z.boolean(),
@@ -61,29 +74,40 @@ export function validateOrder(order: DemoOrder): string[] {
   const r = order.registered;
   const at = (msg: string) => p.push(`${order.orderCode}: ${msg}`);
 
+  // DB の CHECK 制約（ck_noshi、002 以降）と同じ: のしありなら表書き・水引は必須、名入れは null（名入れなし）可
   if (r.noshiRequired) {
-    if (!r.omotegaki || !r.atena || !r.noshiType)
-      at('のし必須なのに表書き・宛名・水引のいずれかが空');
-  } else if (r.omotegaki || r.atena || r.noshiType) {
-    at('のし不要なのに表書き・宛名・水引が入っている');
+    if (!r.omotegaki || !r.noshiType) at('のし必須なのに表書き・水引のいずれかが空');
+  } else if (r.omotegaki || r.atena || r.noshiType || r.noshiSize) {
+    at('のし不要なのに表書き・名入れ・水引・大きさが入っている');
   }
+  if (order.kind === 'real' && !order.setup) at('実物のオーダーに、並べる物（setup）がない');
   if (r.cardRequired !== (r.cardText !== null)) at('カード必須とカード文面の有無が一致しない');
   if (!r.noshiRequired && !r.cardRequired) at('のしもカードも不要');
 
-  // 現物（印刷物）側の整合: のしの3項目は全部あるか全部ないか。カードの文面は枠に収まる長さか
+  // 現物側の整合: のしがある（水引がある）ときだけ表書き・名入れを入れられる（表書きなし＝無地、名入れなし可）
   const pr = order.printed;
-  const noshiParts = [pr.omotegaki, pr.atena, pr.noshiType].filter(v => v !== null).length;
-  if (noshiParts !== 0 && noshiParts !== 3)
-    at('現物ののしの表書き・宛名・水引が一部だけ入っている');
+  if (pr.noshiType === null && (pr.omotegaki !== null || pr.atena !== null)) {
+    at('現物ののしに水引がないのに、表書き・名入れが入っている');
+  }
+  if (
+    order.kind === 'pseudo' &&
+    pr.noshiType !== null &&
+    pr.omotegaki === null &&
+    pr.atena === null
+  ) {
+    at('擬似のしに表書きも名入れもない（無地は実物で確認する）');
+  }
   if (pr.cardText !== null && [...pr.cardText].length > CARD_TEXT_MAX) {
     at(`現物のカード文面が長すぎる（${CARD_TEXT_MAX} 文字まで）`);
   }
 
-  // 想定結果と「登録 vs 印刷」の差分が一致しているか（主判定の項目のみ）
+  // 想定結果と「登録 vs 現物」の差分が一致しているか（主判定の項目のみ）
+  const printedOmotegaki = pr.omotegaki ?? (pr.noshiType !== null ? OMOTEGAKI_BLANK : null);
   const diffs = [
-    r.noshiRequired && order.printed.omotegaki !== r.omotegaki,
-    r.noshiRequired && order.printed.atena !== r.atena,
-    r.cardRequired && order.printed.cardText !== r.cardText,
+    r.noshiRequired && printedOmotegaki !== r.omotegaki,
+    // 名入れなし（null）は判定の対象外
+    r.noshiRequired && r.atena !== null && pr.atena !== r.atena,
+    r.cardRequired && pr.cardText !== r.cardText,
   ].filter(Boolean).length;
   if (order.expected === 'OK' && diffs > 0) at('想定OKなのに印刷内容が登録と異なる');
   if (order.expected === 'NG' && diffs === 0) at('想定NGなのに印刷内容が登録と同じ');

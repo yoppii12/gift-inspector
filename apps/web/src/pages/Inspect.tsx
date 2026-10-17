@@ -239,13 +239,16 @@ function CaptureGuide() {
         </Typography>
         <Box component="ol" sx={{m: 0, mt: 1, pl: 2.5, '& li': {mb: 0.5}}}>
           <Typography component="li" variant="body2">
-            のしとメッセージカードを、作業台に重ならないように並べる
+            のし紙・メッセージカード・袋などの資材を、作業台に重ならないように並べる
           </Typography>
           <Typography component="li" variant="body2">
-            真上から、文字全体が画面に入るように撮る
+            のし紙は箱に掛ける前に平らに置き、四辺がすべて写るようにする
           </Typography>
           <Typography component="li" variant="body2">
-            明るい場所で、影や反射が文字にかからないようにする
+            巾着袋などは透明の袋から出しておく
+          </Typography>
+          <Typography component="li" variant="body2">
+            真上から、全体が画面に入るように撮る。影や反射が文字にかからないようにする
           </Typography>
         </Box>
       </Box>

@@ -15,8 +15,9 @@ import {SEED_SQL_RELATIVE_PATH, renderSeedSql} from '../src/seed-sql';
 const orders = loadDemoOrders();
 
 describe('デモ用オーダーの元データ', () => {
-  it('5件あり、OK と意図的な NG の両方を含む', () => {
-    expect(orders).toHaveLength(5);
+  it('擬似のし5件・実物4件があり、OK と意図的な NG の両方を含む', () => {
+    expect(orders.filter(o => o.kind === 'pseudo')).toHaveLength(5);
+    expect(orders.filter(o => o.kind === 'real')).toHaveLength(4);
     expect(orders.filter(o => o.expected === 'OK').length).toBeGreaterThan(0);
     expect(orders.filter(o => o.expected === 'NG').length).toBeGreaterThan(0);
   });
@@ -132,10 +133,23 @@ describe('擬似のし・カード', () => {
     expect(printedContent(o)).toMatchObject({hasNoshi: false, hasCard: true});
   });
 
-  it('現物ののしの3項目が一部だけ入っていれば矛盾として検出する', () => {
+  it('現物ののしに水引がないのに表書き・名入れがあれば矛盾として検出する', () => {
     const o = structuredClone(orders[0] as DemoOrder);
     o.printed = {...o.printed, omotegaki: '御祝', atena: '佐藤', noshiType: null};
-    expect(validateOrder(o).join()).toMatch(/一部だけ/);
+    expect(validateOrder(o).join()).toMatch(/水引がないのに/);
+  });
+
+  it('実物のオーダーは並べる物（setup）が必須', () => {
+    const o = structuredClone(orders.find(x => x.kind === 'real') as DemoOrder);
+    delete o.setup;
+    expect(validateOrder(o).join()).toMatch(/setup/);
+  });
+
+  it('無地（現物の表書きなし）と名入れなしは、登録と一致していれば想定 OK として通る', () => {
+    const blank = orders.find(o => o.registered.omotegaki === '無地') as DemoOrder;
+    expect(blank.printed.omotegaki).toBeNull();
+    expect(blank.registered.atena).toBeNull();
+    expect(validateOrder(blank)).toEqual([]);
   });
 
   it('現物のカード文面が枠に収まらない長さなら検出する', () => {
