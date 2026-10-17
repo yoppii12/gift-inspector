@@ -60,7 +60,8 @@ export async function renderQrSheetPdf(
   const headerH = 56;
   const cellW = (pageW - margin * 2) / cols;
   const cellH = (doc.page.height - margin * 2 - headerH - 20) / rowsPerPage;
-  const qrSize = 140;
+  // 実物のオーダーは並べる物まで載せるので、QR を少し小さくして文字の場所を空ける
+  const qrSize = 104;
 
   const drawHeader = () => {
     doc
@@ -98,14 +99,30 @@ export async function renderQrSheetPdf(
     doc.font('jp').fontSize(12).fillColor(COLOR.main).text(order.orderCode, textX, textY);
     textY += 18;
     const lines = [
-      r.noshiRequired ? `のし：${r.omotegaki ?? ''}／${r.noshiType ?? ''}` : 'のし：なし',
-      r.noshiRequired ? `名入れ：${r.atena ?? 'なし'}` : null,
-      `カード：${r.cardRequired ? 'あり' : 'なし'}`,
+      r.noshiRequired
+        ? `のし：${[r.omotegaki, r.noshiType, r.noshiSize].filter(Boolean).join('／')}`
+        : 'のし：なし',
+      [
+        r.noshiRequired ? `名入れ：${r.atena ?? 'なし'}` : null,
+        `カード：${r.cardRequired ? 'あり' : 'なし'}`,
+      ]
+        .filter(Boolean)
+        .join('　'),
+      r.bagType !== null || r.carrierBag !== null
+        ? [
+            r.bagType !== null ? `ラッピング：${r.bagType}` : null,
+            r.carrierBag !== null ? `手提げ袋：${r.carrierBag ? 'あり' : 'なし'}` : null,
+          ]
+            .filter(Boolean)
+            .join('　')
+        : null,
+      order.kind === 'real' ? `並べる物：${order.setup ?? ''}` : null,
     ].filter((l): l is string => l !== null);
-    doc.font('jp-regular').fontSize(9).fillColor(COLOR.main60);
+    doc.font('jp-regular').fontSize(8.5).fillColor(COLOR.main60);
+    const textW = cellW - 32;
     for (const line of lines) {
-      doc.text(line, textX, textY, {width: cellW - 32});
-      textY += 13;
+      doc.text(line, textX, textY, {width: textW, lineGap: 1});
+      textY += doc.heightOfString(line, {width: textW, lineGap: 1}) + 2;
     }
   }
 

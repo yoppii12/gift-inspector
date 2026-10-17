@@ -54,7 +54,7 @@ export function OrderSelect({
           <SectionTitle title="検品する内容" aside="登録情報" />
           <OrderDetails order={order} />
           <Typography variant="caption" component="p" sx={{mt: 2}}>
-            のし・メッセージカードを作業台に並べて撮影します
+            のし紙・メッセージカード・袋などを作業台に並べて撮影します
           </Typography>
         </Page>
       </>

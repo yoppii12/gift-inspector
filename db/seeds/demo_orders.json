@@ -1,5 +1,5 @@
 {
-  "$comment": "デモ用オーダーの唯一の元データ。編集したら `npm run demo-kit` で SQL シード・QR・印刷物を再生成する。人名・文面はすべて架空。registered=DBに登録する正解、printed=撮影用に印刷する現物の内容。",
+  "$comment": "デモ用オーダーの唯一の元データ。編集したら `npm run demo-kit` で SQL シード・QR・印刷物を再生成する。人名・文面はすべて架空。registered=DBに登録する正解、printed=現物の内容（kind=pseudo は擬似のし・カードとして印刷、kind=real は受領した実物の内容）、setup=撮影時に並べる物。",
   "orders": [
     {
       "orderCode": "GIFT-DEMO-001",
@@ -95,6 +95,102 @@
       },
       "expected": "NG",
       "note": "カードNG（登録「お幸せを」／現物「ご多幸を」）"
+    },
+    {
+      "orderCode": "GIFT-DEMO-006",
+      "kind": "real",
+      "setup": "長いのし紙（花結び・御祝）、メッセージカード、紙平袋、シール",
+      "registered": {
+        "omotegaki": "御祝",
+        "atena": null,
+        "cardText": "HAPPY BIRTHDAY! おめでとうございます。",
+        "noshiType": "花結び",
+        "noshiSize": "長い",
+        "noshiRequired": true,
+        "cardRequired": true,
+        "bagType": "紙平袋",
+        "carrierBag": false
+      },
+      "printed": {
+        "omotegaki": "御祝",
+        "atena": null,
+        "cardText": "HAPPY BIRTHDAY! おめでとうございます。",
+        "noshiType": "花結び"
+      },
+      "expected": "OK",
+      "note": "実物: 長いのし＋カード＋紙平袋・シール。参考判定もすべて一致"
+    },
+    {
+      "orderCode": "GIFT-DEMO-007",
+      "kind": "real",
+      "setup": "短いのし紙（結び切り・内祝）、布巾着袋（袋から出す）、取扱説明書、紙手提げ袋",
+      "registered": {
+        "omotegaki": "内祝",
+        "atena": null,
+        "cardText": null,
+        "noshiType": "結び切り",
+        "noshiSize": "短い",
+        "noshiRequired": true,
+        "cardRequired": false,
+        "bagType": "布巾着袋",
+        "carrierBag": true
+      },
+      "printed": {
+        "omotegaki": "内祝",
+        "atena": null,
+        "cardText": null,
+        "noshiType": "結び切り"
+      },
+      "expected": "OK",
+      "note": "実物: 短いのし＋布巾着袋・取扱説明書＋紙手提げ袋。参考判定もすべて一致"
+    },
+    {
+      "orderCode": "GIFT-DEMO-008",
+      "kind": "real",
+      "setup": "短いのし紙（花結び・寿）だけ（登録は長い・御祝）",
+      "registered": {
+        "omotegaki": "御祝",
+        "atena": null,
+        "cardText": null,
+        "noshiType": "花結び",
+        "noshiSize": "長い",
+        "noshiRequired": true,
+        "cardRequired": false,
+        "bagType": "なし",
+        "carrierBag": false
+      },
+      "printed": {
+        "omotegaki": "寿",
+        "atena": null,
+        "cardText": null,
+        "noshiType": "花結び"
+      },
+      "expected": "NG",
+      "note": "表書きNG（登録「御祝」／現物「寿」）。参考: のし紙の大きさも違う（登録 長い／現物 短い）"
+    },
+    {
+      "orderCode": "GIFT-DEMO-009",
+      "kind": "real",
+      "setup": "短いのし紙（花結び・無地）だけ",
+      "registered": {
+        "omotegaki": "無地",
+        "atena": null,
+        "cardText": null,
+        "noshiType": "花結び",
+        "noshiSize": "短い",
+        "noshiRequired": true,
+        "cardRequired": false,
+        "bagType": "なし",
+        "carrierBag": false
+      },
+      "printed": {
+        "omotegaki": null,
+        "atena": null,
+        "cardText": null,
+        "noshiType": "花結び"
+      },
+      "expected": "OK",
+      "note": "表書き「無地」（印字なしが正解）。名入れなし"
     }
   ]
 }

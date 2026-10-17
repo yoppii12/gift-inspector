@@ -43,7 +43,11 @@ async function main(): Promise<void> {
   console.log(`印刷用 PDF: ${pdfPath}`);
 
   const noshiPath = join(OUT_DIR, `${yymmdd(now)}_擬似のし・カード.pdf`);
-  const pages = await renderNoshiKitPdf(orders, noshiPath);
+  // 実物（kind=real）のオーダーは受領した実物を使うので、擬似のし・カードは作らない
+  const pages = await renderNoshiKitPdf(
+    orders.filter(o => o.kind === 'pseudo'),
+    noshiPath
+  );
   console.log(`擬似のし・カード PDF: ${noshiPath}（${pages}ページ）`);
 }
 
