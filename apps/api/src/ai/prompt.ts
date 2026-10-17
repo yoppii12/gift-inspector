@@ -2,13 +2,14 @@
  * AI への読取指示。正解情報（オーダーの登録内容）は一切含めない（CLAUDE.md 2章 ガードレール5）。
  * 文面を変えたら PROMPT_VERSION を上げる（判定記録に残り、結果の差を追えるようにするため）。
  * read-v2: 返し方の指示をプロバイダ別（tool use / JSON）に分けた
+ * read-v5: 水引の見分け方（花結び＝左右2つの輪、結び切り＝輪がなく小さな半円）を書く（#64）
  * read-v4: 写っている資材（袋・シール・取扱説明書・手提げ袋）を追加。カードの隅の識別コードは文面に含めない（#53）
  * read-v3: 水引を「花結び」に、表書きが印字されていないか（omotegaki_blank）を追加。位置は水引の上・下で説明（横長ののし紙にも合わせる。#51）
  */
 import {AI_READ_SCHEMA_VERSION, aiReadSchema} from '@gift-inspector/shared';
 import {z} from 'zod';
 
-export const PROMPT_VERSION = 'read-v4';
+export const PROMPT_VERSION = 'read-v5';
 
 export const SYSTEM_PROMPT = `あなたはギフト出荷の検品で、写真に写った「のし」と「メッセージカード」の印刷文字を書き写し、写っているラッピング資材を確かめる担当です。
 
@@ -25,7 +26,7 @@ export const JSON_INSTRUCTION = '- 結果は指定された JSON の形式だけ
 export const USER_PROMPT = `この写真を読み取ってください。
 
 - noshi_present: のし紙が写っているか
-- mizuhiki_type: のしの水引の結び方（「花結び」「結び切り」、判別できなければ「不明」）
+- mizuhiki_type: のしの水引の結び方。中央の結び目の形で見分ける。「花結び」は、結び目から左右に2つの輪（リボンのような形）が出て、下に2本の端が垂れている。「結び切り」は、輪がなく、中央で水引が小さな半円（U字）を描いて合わさっているだけ。輪が見えれば「花結び」、輪がなく小さな半円だけなら「結び切り」、判別できなければ「不明」
 - omotegaki: のしの水引の上に印字された表書き（印字されていなければ null）
 - omotegaki_blank: 水引の上（表書きの位置）に何も印字されていないことを、はっきり確認できたときだけ true。文字らしきもの・かすれ・にじみが見えるとき、ぼやけて判断できないとき、のし紙が写っていないときは false。「読み取れない」は「印字されていない」ではない。omotegaki に値を入れたときは必ず false
 - atena: のしの水引の下に印字された名入れ（印字されていなければ null）
