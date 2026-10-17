@@ -38,7 +38,7 @@ export function OrderDetails({order}: {order: OrderView}) {
     <Card>
       <Row label="のし" value={order.noshiRequired ? `あり・${order.noshiType ?? ''}` : 'なし'} />
       {order.noshiRequired && <Row label="表書き" value={order.omotegaki ?? '—'} />}
-      {order.noshiRequired && <Row label="名入れ・宛名" value={order.atena ?? '—'} />}
+      {order.noshiRequired && <Row label="名入れ" value={order.atena ?? 'なし'} />}
       <Row
         label="メッセージカード"
         value={order.cardRequired ? 'あり（印刷）' : 'なし'}

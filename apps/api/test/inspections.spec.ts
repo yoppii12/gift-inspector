@@ -165,7 +165,7 @@ describe('POST /api/inspections（DB なし）', () => {
   });
 
   it.each([
-    ['正しい手入力', {omotegaki: '御祝', atena: '佐藤 花子', cardText: 'x', noshiType: '蝶結び'}],
+    ['正しい手入力', {omotegaki: '御祝', atena: '佐藤 花子', cardText: 'x', noshiType: '花結び'}],
     ['不正な手入力', {noshiType: 'あわじ結び', noshiRequired: 'yes'}],
   ])(
     '開発モードが無効なら、手入力（%s）は DEV_MODE_DISABLED（403）で、DB も AI も使わない',

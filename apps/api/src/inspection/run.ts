@@ -310,6 +310,7 @@ function toResult(
     reason: i.reason,
     expected: i.expected,
     read: i.read,
+    readBlank: i.blank,
   }));
   return {
     inspectionId,

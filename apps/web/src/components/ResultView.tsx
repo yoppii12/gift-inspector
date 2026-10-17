@@ -227,7 +227,13 @@ function ItemRow({item}: {item: InspectionItem}) {
             label="AI読取"
             value={item.read}
             strong={strong}
-            emptyText={item.reason === 'NOT_PRESENT' ? '（写っていません）' : '（読み取れず）'}
+            emptyText={
+              item.reason === 'NOT_PRESENT'
+                ? '（写っていません）'
+                : item.readBlank
+                  ? '（印字なし）'
+                  : '（読み取れず）'
+            }
           />
         </Box>
       )}

@@ -223,7 +223,9 @@ function OrderList({onSelect}: {onSelect: (order: OrderView) => void}) {
               <Box sx={{minWidth: 0}}>
                 <Typography variant="body1">{o.orderCode}</Typography>
                 <Typography variant="caption" component="p">
-                  {o.noshiRequired ? `${o.omotegaki ?? ''}／${o.atena ?? ''}` : 'のしなし'}
+                  {o.noshiRequired
+                    ? `${o.omotegaki ?? ''}／${o.atena ?? '名入れなし'}`
+                    : 'のしなし'}
                   {o.cardRequired ? '／カードあり' : ''}
                 </Typography>
               </Box>

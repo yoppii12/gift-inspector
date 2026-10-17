@@ -9,6 +9,7 @@ import type {ReactNode} from 'react';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 
 import {ManualEntry} from '../src/components/ManualEntry';
+import {OrderDetails} from '../src/components/OrderDetails';
 import {ResultView} from '../src/components/ResultView';
 import {Inspect} from '../src/pages/Inspect';
 import {ClientError} from '../src/services/api';
@@ -61,8 +62,8 @@ function result(overrides: Partial<InspectionResult> = {}): InspectionResult {
     reference: {
       noshiPresent: true,
       cardPresent: false,
-      mizuhikiRead: '蝶結び',
-      mizuhikiExpected: '蝶結び',
+      mizuhikiRead: '花結び',
+      mizuhikiExpected: '花結び',
     },
     completedAt: '2026-10-07T00:00:00Z',
     replayed: false,
@@ -76,6 +77,21 @@ afterEach(() => {
 });
 
 describe('ResultView', () => {
+  it('表書きの位置に印字がないと AI が答えたときは「（印字なし）」と表示する（#51）', () => {
+    wrap(
+      <ResultView
+        result={result({
+          items: [
+            item('omotegaki', 'OK', {expected: '無地', read: null, readBlank: true}),
+            item('atena', 'SKIP', {reason: 'NOT_REQUIRED', expected: null, read: null}),
+          ],
+        })}
+        photoUrl={null}
+      />
+    );
+    expect(screen.getByText('（印字なし）')).toBeTruthy();
+  });
+
   it('OK: 「すべて一致」「出荷に進めます」', () => {
     wrap(<ResultView result={result()} photoUrl={null} />);
     expect(screen.getByText('すべて登録内容と一致しました')).toBeTruthy();
@@ -141,7 +157,7 @@ describe('Inspect（撮影〜送信）', () => {
     omotegaki: '御祝',
     atena: '佐藤 花子',
     cardText: null,
-    noshiType: '蝶結び',
+    noshiType: '花結び',
     noshiRequired: true,
     cardRequired: false,
   };
@@ -245,7 +261,7 @@ describe('開発モードの目印', () => {
     omotegaki: '御祝',
     atena: '佐藤 花子',
     cardText: null,
-    noshiType: '蝶結び' as const,
+    noshiType: '花結び' as const,
     noshiRequired: true,
     cardRequired: false,
   };
@@ -273,7 +289,7 @@ describe('ManualEntry（開発用の手入力）', () => {
     const onStart = vi.fn();
     wrap(<ManualEntry onStart={onStart} />);
     fireEvent.change(screen.getByLabelText(/表書き/), {target: {value: '御礼'}});
-    fireEvent.change(screen.getByLabelText(/名入れ・宛名/), {target: {value: '鈴木 一郎'}});
+    fireEvent.change(screen.getByRole('textbox', {name: /名入れ/}), {target: {value: '鈴木 一郎'}});
     fireEvent.click(screen.getByLabelText('メッセージカードあり'));
     fireEvent.click(screen.getByRole('button', {name: 'この正解で撮影に進む'}));
     expect(onStart).toHaveBeenCalledWith({
@@ -282,9 +298,24 @@ describe('ManualEntry（開発用の手入力）', () => {
       cardRequired: false,
       omotegaki: '御礼',
       atena: '鈴木 一郎',
-      noshiType: '蝶結び',
+      noshiType: '花結び',
       cardText: null,
     });
+  });
+
+  it('名入れなしは明示的に選ぶ。選ぶと名入れは null（名入れの判定は対象外）', () => {
+    const onStart = vi.fn();
+    wrap(<ManualEntry onStart={onStart} />);
+    // 名入れなしを選ばずに空欄のままでは、必須の入力欄が残る
+    expect(screen.getByRole('textbox', {name: /名入れ/})).toBeTruthy();
+    fireEvent.change(screen.getByLabelText(/表書き/), {target: {value: '無地'}});
+    fireEvent.click(screen.getByLabelText('名入れなし'));
+    expect(screen.queryByRole('textbox', {name: /名入れ/})).toBeNull();
+    fireEvent.click(screen.getByLabelText('メッセージカードあり'));
+    fireEvent.click(screen.getByRole('button', {name: 'この正解で撮影に進む'}));
+    expect(onStart).toHaveBeenCalledWith(
+      expect.objectContaining({omotegaki: '無地', atena: null, noshiRequired: true})
+    );
   });
 
   it('のしもカードもなしでは進めない', () => {
@@ -294,5 +325,25 @@ describe('ManualEntry（開発用の手入力）', () => {
     expect(
       screen.getByRole<HTMLButtonElement>('button', {name: 'この正解で撮影に進む'}).disabled
     ).toBe(true);
+  });
+});
+
+describe('OrderDetails（#51）', () => {
+  it('名入れなしのオーダーは「名入れ: なし」と表示する', () => {
+    wrap(
+      <OrderDetails
+        order={{
+          orderCode: 'GIFT-DEMO-006',
+          omotegaki: '無地',
+          atena: null,
+          cardText: 'おめでとうございます。',
+          noshiType: '花結び',
+          noshiRequired: true,
+          cardRequired: true,
+        }}
+      />
+    );
+    expect(screen.getByText('無地')).toBeTruthy();
+    expect(screen.getByText('なし')).toBeTruthy();
   });
 });

@@ -36,14 +36,20 @@
 
 | # | 条件 | 結果 |
 |---|---|---|
-| 1 | 項目が不要（のし項目は `noshi_required=false`、カード項目は `card_required=false`） | `SKIP` / `NOT_REQUIRED` |
+| 1 | 項目が不要（のし項目は `noshi_required=false`、カード項目は `card_required=false`。名入れは正解が `null`＝名入れなしのときも） | `SKIP` / `NOT_REQUIRED` |
 | 2 | 正解値が正規化後に空 | **検品全体を `ERROR` / `CONFIG_INVALID_EXPECTED`**。AI呼出前に検査するので、AIは呼ばない |
 | 3 | AIが対象物なしと回答（`noshi_present=false` / `card_present=false`） | `NG` / `NOT_PRESENT` |
+| 3a | 表書きの正解が「無地」で、読取値がある（文字が印字されている） | `NG` / `MISMATCH` |
+| 3b | 表書きの正解が「無地」で、AI が「印字なし」（`omotegaki_blank=true`）と答えていない | `UNREADABLE` / `TEXT_UNREADABLE` |
+| 3c | 表書きの正解が「無地」で、読取値がなく、AI が「印字なし」と答えた | `OK` / `MATCH` |
+| 3d | 表書きの正解が「無地」でないのに、AI が「印字なし」と答え、読取値もない（印字漏れの疑い） | `NG` / `MISMATCH` |
+| 3e | 表書きの正解が「無地」でないのに、AI が「印字なし」と答えつつ読取値もある（応答の矛盾） | `UNREADABLE` / `TEXT_UNREADABLE` |
 | 4 | 読取値が `null`、または正規化後に空 | `UNREADABLE` / `TEXT_UNREADABLE` |
 | 5 | 正規化後の読取値と正解値が完全一致 | `OK` / `MATCH` |
 | 6 | 上記以外 | `NG` / `MISMATCH` |
 
 - 両辺とも空の場合は、2と4で必ず先に弾かれるため、5の一致判定に到達しない（テストで保証する）。
+- 「無地」（#51）は「何も印字されていないこと」が正解。AI が印字なしと明言し、かつ文字を1つも読んでいないときだけ一致とし、どちらとも言えないときは判定不能にする（読めないのに OK にしない）。項目の OK を返すのは 3c と 5 を合わせた1か所（`judgeItem` の最後）。
 - 一致判定は D6 のとおり完全一致から開始する。閾値（編集距離）を導入する場合は、この表と6章のテストを先に更新する。
 
 ### 2.2 総合結果 `Overall`

@@ -29,7 +29,9 @@ export function ManualEntry({onStart}: {onStart: (order: OrderView) => void}) {
   const [cardRequired, setCardRequired] = useState(true);
   const [omotegaki, setOmotegaki] = useState('');
   const [atena, setAtena] = useState('');
-  const [noshiType, setNoshiType] = useState<MizuhikiType>('蝶結び');
+  // 名入れなしは明示的に選ぶ（入力し忘れで名入れの判定が消えないように）
+  const [noName, setNoName] = useState(false);
+  const [noshiType, setNoshiType] = useState<MizuhikiType>('花結び');
   const [cardText, setCardText] = useState('');
 
   const submit = (event: FormEvent) => {
@@ -39,7 +41,8 @@ export function ManualEntry({onStart}: {onStart: (order: OrderView) => void}) {
       noshiRequired,
       cardRequired,
       omotegaki: noshiRequired ? omotegaki : null,
-      atena: noshiRequired ? atena : null,
+      // 名入れなしを選んだときだけ null（名入れは判定の対象外）
+      atena: noshiRequired && !noName ? atena : null,
       noshiType: noshiRequired ? noshiType : null,
       cardText: cardRequired ? cardText : null,
     });
@@ -68,14 +71,21 @@ export function ManualEntry({onStart}: {onStart: (order: OrderView) => void}) {
                 label="表書き"
                 value={omotegaki}
                 onChange={e => setOmotegaki(e.target.value)}
+                helperText="印字しない場合は「無地」"
                 required
               />
-              <TextField
-                label="名入れ・宛名"
-                value={atena}
-                onChange={e => setAtena(e.target.value)}
-                required
+              <FormControlLabel
+                control={<Checkbox checked={noName} onChange={e => setNoName(e.target.checked)} />}
+                label="名入れなし"
               />
+              {!noName && (
+                <TextField
+                  label="名入れ"
+                  value={atena}
+                  onChange={e => setAtena(e.target.value)}
+                  required
+                />
+              )}
               <TextField
                 select
                 label="水引"

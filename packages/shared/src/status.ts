@@ -9,7 +9,7 @@ export type ItemKey = (typeof ITEM_KEYS)[number];
 
 export const ITEM_LABELS: Record<ItemKey, string> = {
   omotegaki: '表書き',
-  atena: '宛名',
+  atena: '名入れ',
   card_text: 'メッセージカード',
 };
 
@@ -49,8 +49,12 @@ export const REF_WARNINGS = [
 ] as const;
 export type RefWarning = (typeof REF_WARNINGS)[number];
 
-export const MIZUHIKI_TYPES = ['蝶結び', '結び切り'] as const;
+/** 水引の種類（お客様の呼び方。PoC の初期は「花結び」を「蝶結び」と呼んでいた。#51） */
+export const MIZUHIKI_TYPES = ['花結び', '結び切り'] as const;
 export type MizuhikiType = (typeof MIZUHIKI_TYPES)[number];
+
+/** 表書きの正解がこの値のときは「表書きを印字しない」ことが正解（#51） */
+export const OMOTEGAKI_BLANK = '無地';
 
 /** デモ用オーダーのQRコード値の形式。読取値はこの形式で事前検証する */
 export const ORDER_CODE_PATTERN = /^GIFT-DEMO-[0-9]{3}$/;

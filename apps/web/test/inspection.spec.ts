@@ -50,8 +50,8 @@ function result(overrides: Partial<InspectionResult> = {}): InspectionResult {
     reference: {
       noshiPresent: true,
       cardPresent: true,
-      mizuhikiRead: '蝶結び',
-      mizuhikiExpected: '蝶結び',
+      mizuhikiRead: '花結び',
+      mizuhikiExpected: '花結び',
     },
     completedAt: '2026-10-07T00:00:00.000Z',
     replayed: false,
@@ -203,7 +203,7 @@ describe('開発用の手入力モード', () => {
     omotegaki: '御祝',
     atena: '佐藤 花子',
     cardText: null,
-    noshiType: '蝶結び' as const,
+    noshiType: '花結び' as const,
     noshiRequired: true,
     cardRequired: false,
   };

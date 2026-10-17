@@ -99,7 +99,7 @@ export async function renderQrSheetPdf(
     textY += 18;
     const lines = [
       r.noshiRequired ? `のし：${r.omotegaki ?? ''}／${r.noshiType ?? ''}` : 'のし：なし',
-      r.noshiRequired ? `宛名：${r.atena ?? ''}` : null,
+      r.noshiRequired ? `名入れ：${r.atena ?? 'なし'}` : null,
       `カード：${r.cardRequired ? 'あり' : 'なし'}`,
     ].filter((l): l is string => l !== null);
     doc.font('jp-regular').fontSize(9).fillColor(COLOR.main60);

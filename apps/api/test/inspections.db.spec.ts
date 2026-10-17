@@ -332,7 +332,7 @@ describe.skipIf(!enabled)('POST /api/inspections（MySQL）', () => {
       omotegaki: '御祝',
       atena: '佐藤 花子',
       cardText: MOCK_READING.card_text ?? '',
-      noshiType: '蝶結び',
+      noshiType: '花結び',
     };
 
     it('手入力の正解で、通常と同じ規則で判定し、mode=manual・オーダーなしで記録する', async () => {
@@ -378,6 +378,20 @@ describe.skipIf(!enabled)('POST /api/inspections（MySQL）', () => {
         result: 'NG',
         expected: '御礼',
         read: '御祝',
+      });
+    });
+
+    it('名入れを空で送ると名入れなし（名入れは SKIP）として判定する（#51）', async () => {
+      const {app} = setup([valid], {devMode: true});
+      const res = await app.inject({
+        method: 'POST',
+        url: '/api/inspections',
+        ...manualForm(randomUUID(), fakeJpeg(), {...matching, atena: ''}),
+      });
+      const body = JSON.parse(res.payload) as InspectionResult;
+      expect(body.items.find(i => i.key === 'atena')).toMatchObject({
+        result: 'SKIP',
+        expected: null,
       });
     });
 

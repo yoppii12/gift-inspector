@@ -11,8 +11,9 @@ export type MockScenario = 'ok' | 'schema_invalid' | 'timeout' | 'rate_limited' 
 /** 'ok' のときに返す読取結果（デモ用オーダー GIFT-DEMO-001 の印刷物と同じ内容） */
 export const MOCK_READING: AiReadResult = {
   noshi_present: true,
-  mizuhiki_type: '蝶結び',
+  mizuhiki_type: '花結び',
   omotegaki: '御祝',
+  omotegaki_blank: false,
   atena: '佐藤 花子',
   card_present: true,
   card_text: 'ご出産おめでとうございます。心ばかりの品をお贈りします。',

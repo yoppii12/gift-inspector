@@ -11,6 +11,7 @@ import {
   type ItemReason,
   type ItemResult,
   type MizuhikiType,
+  OMOTEGAKI_BLANK,
   type Overall,
   type RefWarning,
   type UnreadableReason,
@@ -20,7 +21,9 @@ import {normalizeText} from './normalize';
 
 /** 判定時点の正解（オーダーの登録内容、または開発用の手入力） */
 export interface Expected {
+  /** のしありなら必須。「無地」は表書きを印字しないことが正解 */
   omotegaki: string | null;
+  /** のしありで null なら名入れなし（名入れは対象外）。空白だけの文字列は設定の不備 */
   atena: string | null;
   cardText: string | null;
   noshiType: MizuhikiType | null;
@@ -42,6 +45,8 @@ export interface ItemJudgement {
   read: string | null;
   normalizedExpected: string | null;
   normalizedRead: string | null;
+  /** AI が「表書きの位置に何も印字されていない」と答えた（表書きの項目のみ） */
+  blank: boolean;
 }
 
 export interface Judgement {
@@ -69,7 +74,15 @@ const ITEM_FIELDS: Record<ItemKey, {expected: keyof Expected; read: keyof AiRead
 };
 
 function isRequired(key: ItemKey, expected: Expected): boolean {
-  return key === 'card_text' ? expected.cardRequired : expected.noshiRequired;
+  if (key === 'card_text') return expected.cardRequired;
+  // 名入れなし（null）は対象外。空白だけの文字列は対象のまま残し、assertValidExpected で設定の不備にする
+  if (key === 'atena') return expected.noshiRequired && expected.atena !== null;
+  return expected.noshiRequired;
+}
+
+/** 表書きの正解が「無地」（表書きを印字しないことが正解） */
+function expectsBlank(key: ItemKey, normalizedExpected: string | null): boolean {
+  return key === 'omotegaki' && normalizedExpected === OMOTEGAKI_BLANK;
 }
 
 function isPresent(key: ItemKey, read: AiReadResult): boolean {
@@ -100,7 +113,15 @@ export function judgeItem(key: ItemKey, expected: Expected, read: AiReadResult):
   const readRaw = read[ITEM_FIELDS[key].read] as string | null;
   const normalizedExpected = normalizeText(expectedRaw);
   const normalizedRead = normalizeText(readRaw);
-  const base = {key, expected: expectedRaw, read: readRaw, normalizedExpected, normalizedRead};
+  const blank = key === 'omotegaki' && read.omotegaki_blank;
+  const base = {
+    key,
+    expected: expectedRaw,
+    read: readRaw,
+    normalizedExpected,
+    normalizedRead,
+    blank,
+  };
 
   if (!isRequired(key, expected)) return {...base, result: 'SKIP', reason: 'NOT_REQUIRED'};
   // 2: assertValidExpected で弾いているはずだが、ここでも OK に倒さない
@@ -108,8 +129,25 @@ export function judgeItem(key: ItemKey, expected: Expected, read: AiReadResult):
     throw new AppError('CONFIG_INVALID_EXPECTED', {detail: `${key} の正解が空`});
   }
   if (!isPresent(key, read)) return {...base, result: 'NG', reason: 'NOT_PRESENT'};
-  if (normalizedRead === null) return {...base, result: 'UNREADABLE', reason: 'TEXT_UNREADABLE'};
-  if (normalizedRead === normalizedExpected) return {...base, result: 'OK', reason: 'MATCH'};
+  let matched: boolean;
+  if (expectsBlank(key, normalizedExpected)) {
+    // 無地: 文字が読めたら印字されている（不一致）。記号・空白だけでも何か返したなら、印字なしとは言えない。
+    // 「印字なし」と答え、読取値を何も返していない（null）ときだけ一致とする
+    if (normalizedRead !== null) return {...base, result: 'NG', reason: 'MISMATCH'};
+    if (readRaw !== null || !blank) {
+      return {...base, result: 'UNREADABLE', reason: 'TEXT_UNREADABLE'};
+    }
+    matched = true;
+  } else {
+    // 無地でない正解に「印字なし」と答えた: 印字漏れの疑い。読み取れずではなく不一致にする
+    if (blank && readRaw === null) return {...base, result: 'NG', reason: 'MISMATCH'};
+    // 「印字なし」と答えたのに何か読んでいる（応答が矛盾）: どちらを信じても OK にしない
+    if (blank) return {...base, result: 'UNREADABLE', reason: 'TEXT_UNREADABLE'};
+    if (normalizedRead === null) return {...base, result: 'UNREADABLE', reason: 'TEXT_UNREADABLE'};
+    matched = normalizedRead === normalizedExpected;
+  }
+  // 項目の OK はここだけ
+  if (matched) return {...base, result: 'OK', reason: 'MATCH'};
   return {...base, result: 'NG', reason: 'MISMATCH'};
 }
 
@@ -213,6 +251,7 @@ export function judge(expected: Expected, outcome: ReadOutcome, options: JudgeOp
           read: null,
           normalizedExpected: normalizeText(expectedRaw),
           normalizedRead: null,
+          blank: false,
         };
       }),
       refWarnings: [],

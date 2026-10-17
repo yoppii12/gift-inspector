@@ -85,7 +85,7 @@ function verticalText(
   }
 }
 
-/** 水引（紅白の帯＋蝶結びの輪、または結び切りの結び目） */
+/** 水引（紅白の帯＋花結びの輪、または結び切りの結び目） */
 function mizuhiki(doc: Doc, x: number, y: number, width: number, type: string | null) {
   if (type === null) return; // 水引なし（帯も結び目も描かない）
   const lines = 5;
@@ -101,7 +101,7 @@ function mizuhiki(doc: Doc, x: number, y: number, width: number, type: string | 
   const cx = x + width / 2;
   const cy = y + ((lines - 1) * gap) / 2;
   doc.lineWidth(mm(1.1)).strokeColor(RED);
-  if (type === '蝶結び') {
+  if (type === '花結び') {
     // 左右の輪と、下に垂れる2本の足
     doc.ellipse(cx - mm(9), cy, mm(9), mm(6)).stroke();
     doc.ellipse(cx + mm(9), cy, mm(9), mm(6)).stroke();
