@@ -199,6 +199,7 @@ describe('Inspect（撮影〜送信）', () => {
     noshiType: '花結び',
     noshiRequired: true,
     cardRequired: false,
+    noshiSize: null,
     bagType: null,
     carrierBag: null,
   };
@@ -305,6 +306,7 @@ describe('開発モードの目印', () => {
     noshiType: '花結び' as const,
     noshiRequired: true,
     cardRequired: false,
+    noshiSize: null,
     bagType: null,
     carrierBag: null,
   };
@@ -339,6 +341,7 @@ describe('ManualEntry（開発用の手入力）', () => {
       orderCode: 'MANUAL',
       noshiRequired: true,
       cardRequired: false,
+      noshiSize: null,
       bagType: null,
       carrierBag: null,
       omotegaki: '御礼',
@@ -385,6 +388,7 @@ describe('OrderDetails（#51）', () => {
           noshiType: '花結び',
           noshiRequired: true,
           cardRequired: true,
+          noshiSize: null,
           bagType: '紙平袋',
           carrierBag: true,
         }}

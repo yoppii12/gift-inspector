@@ -16,6 +16,7 @@
     "@anthropic-ai/sdk": "^0.131.0",
     "@fastify/multipart": "^10.1.2",
     "fastify": "^5.12.5",
+    "jpeg-js": "^0.4.4",
     "mysql2": "^3.24.5",
     "pino": "^10.4.0",
     "zod": "^4.6.5"

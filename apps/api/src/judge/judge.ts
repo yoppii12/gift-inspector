@@ -12,6 +12,7 @@ import {
   type ItemReason,
   type ItemResult,
   type MizuhikiType,
+  type NoshiSize,
   OMOTEGAKI_BLANK,
   type Overall,
   REFERENCE_LABELS,
@@ -33,11 +34,21 @@ export interface Expected {
   noshiType: MizuhikiType | null;
   noshiRequired: boolean;
   cardRequired: boolean;
+  /** のし紙の大きさ（参考判定）。null は対象外 */
+  noshiSize: NoshiSize | null;
   /** ラッピングの袋（参考判定）。null は対象外 */
   bagType: BagType | null;
   /** 紙手提げ袋（参考判定）。null は対象外 */
   carrierBag: boolean | null;
 }
+
+/** AI 以外で計測した値（参考判定にだけ使う） */
+export interface Measurements {
+  /** のし紙の縦横比の計測（measure/noshi-size.ts）。計測しなかった・失敗したときは null */
+  noshiSize: {size: NoshiSize | null; ratio: number | null; reason: string} | null;
+}
+
+export const NO_MEASUREMENTS: Measurements = {noshiSize: null};
 
 /** AI 読取の結果（ai/guard.ts の出力を判定用に絞ったもの） */
 export type ReadOutcome =
@@ -160,7 +171,11 @@ export function judgeItem(key: ItemKey, expected: Expected, read: AiReadResult):
 }
 
 /** 参考判定の警告（2.3） */
-export function refWarnings(expected: Expected, read: AiReadResult): RefWarning[] {
+export function refWarnings(
+  expected: Expected,
+  read: AiReadResult,
+  measurements: Measurements = NO_MEASUREMENTS
+): RefWarning[] {
   const w: RefWarning[] = [];
   if (expected.noshiRequired && !read.noshi_present) w.push('NOSHI_MISSING');
   if (!expected.noshiRequired && read.noshi_present) w.push('NOSHI_UNEXPECTED');
@@ -169,6 +184,12 @@ export function refWarnings(expected: Expected, read: AiReadResult): RefWarning[
   if (expected.noshiRequired && read.noshi_present) {
     if (read.mizuhiki_type === '不明') w.push('MIZUHIKI_UNKNOWN');
     else if (read.mizuhiki_type !== expected.noshiType) w.push('MIZUHIKI_MISMATCH');
+  }
+  // のし紙の長短（オーダーで指定があり、のし紙が写っているときだけ。#55）
+  if (expected.noshiRequired && expected.noshiSize !== null && read.noshi_present) {
+    const measured = measurements.noshiSize?.size ?? null;
+    if (measured === null) w.push('NOSHI_SIZE_UNKNOWN');
+    else if (measured !== expected.noshiSize) w.push('NOSHI_SIZE_MISMATCH');
   }
   // ラッピング資材・手提げ袋（オーダーで指定があるときだけ。#53）
   if (expected.bagType !== null) {
@@ -200,17 +221,37 @@ function seenBag(read: AiReadResult): string {
 
 const yesNo = (v: boolean) => (v ? 'あり' : 'なし');
 
+const NOSHI_SIZE_REASON_LABELS: Record<string, string> = {
+  BORDERLINE: '長い・短いの境目に近い',
+  NOT_FOUND: 'のし紙の輪郭が見つからない',
+  MULTIPLE: 'のし紙らしい紙が複数ある',
+  UNSUPPORTED_FORMAT: 'JPEG 以外の画像',
+  ERROR: '計測に失敗',
+};
+
+function noshiSizeDetail(m: Measurements['noshiSize']): string | undefined {
+  if (m === null) return undefined;
+  const ratio = m.ratio === null ? null : `縦横比 ${m.ratio.toFixed(2)}`;
+  const reason = m.size === null ? (NOSHI_SIZE_REASON_LABELS[m.reason] ?? m.reason) : null;
+  return [ratio, reason].filter(Boolean).join('・') || undefined;
+}
+
 /**
  * 参考判定の一覧（表示用。判定には使わない）。オーダーで対象になっている項目だけを返す。
  * AI が読み取れなかったとき（read = null）は、読み取り結果を null・状態を UNKNOWN にする。
  */
-export function referenceItems(expected: Expected, read: AiReadResult | null): ReferenceItem[] {
+export function referenceItems(
+  expected: Expected,
+  read: AiReadResult | null,
+  measurements: Measurements = NO_MEASUREMENTS
+): ReferenceItem[] {
   const items: ReferenceItem[] = [];
   const add = (
     key: ReferenceKey,
     expectedLabel: string,
     readLabel: string | null,
-    unknown = false
+    unknown = false,
+    detail?: string
   ) =>
     items.push({
       key,
@@ -219,9 +260,20 @@ export function referenceItems(expected: Expected, read: AiReadResult | null): R
       read: read === null ? null : readLabel,
       status:
         read === null || unknown ? 'UNKNOWN' : readLabel === expectedLabel ? 'MATCH' : 'MISMATCH',
+      ...(detail === undefined ? {} : {detail}),
     });
 
   add('noshi', yesNo(expected.noshiRequired), read && yesNo(read.noshi_present));
+  if (expected.noshiRequired && expected.noshiSize !== null) {
+    const m = measurements.noshiSize;
+    add(
+      'noshi_size',
+      expected.noshiSize,
+      read && (read.noshi_present ? (m?.size ?? null) : null),
+      !read?.noshi_present || !m?.size,
+      noshiSizeDetail(m)
+    );
+  }
   if (expected.noshiRequired && expected.noshiType !== null) {
     // のしが写っていない・判別できないときは水引の一致を判断しない
     add(
@@ -300,7 +352,12 @@ function errorJudgement(code: ErrorCode): Judgement {
 }
 
 /** 総合判定（2.2 の 1〜7）。例外を投げず、必ず Judgement を返す */
-export function judge(expected: Expected, outcome: ReadOutcome, options: JudgeOptions): Judgement {
+export function judge(
+  expected: Expected,
+  outcome: ReadOutcome,
+  options: JudgeOptions,
+  measurements: Measurements = NO_MEASUREMENTS
+): Judgement {
   try {
     assertValidExpected(expected);
   } catch (err: unknown) {
@@ -337,7 +394,7 @@ export function judge(expected: Expected, outcome: ReadOutcome, options: JudgeOp
   }
 
   const items = ITEM_KEYS.map(key => judgeItem(key, expected, outcome.data));
-  const warnings = refWarnings(expected, outcome.data);
+  const warnings = refWarnings(expected, outcome.data, measurements);
   return {
     ...combineItems(
       items.map(i => i.result),

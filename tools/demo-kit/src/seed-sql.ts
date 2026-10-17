@@ -20,6 +20,7 @@ export function renderSeedSql(orders: DemoOrder[]): string {
       sqlString(r.noshiType),
       r.noshiRequired ? '1' : '0',
       r.cardRequired ? '1' : '0',
+      sqlString(r.noshiSize),
       sqlString(r.bagType),
       r.carrierBag === null ? 'NULL' : r.carrierBag ? '1' : '0',
       sqlString(`想定: ${o.expected}。${o.note}`),
@@ -32,7 +33,7 @@ export function renderSeedSql(orders: DemoOrder[]): string {
 -- デモ用オーダー（想定結果は demo_note。API では返さない）。何度流しても同じ状態になる。
 
 INSERT INTO demo_orders
-  (order_code, sort_order, omotegaki, atena, card_text, noshi_type, noshi_required, card_required, bag_type, carrier_bag, demo_note)
+  (order_code, sort_order, omotegaki, atena, card_text, noshi_type, noshi_required, card_required, noshi_size, bag_type, carrier_bag, demo_note)
 VALUES
 ${rows.join(',\n')}
 AS new
@@ -44,6 +45,7 @@ ON DUPLICATE KEY UPDATE
   noshi_type = new.noshi_type,
   noshi_required = new.noshi_required,
   card_required = new.card_required,
+  noshi_size = new.noshi_size,
   bag_type = new.bag_type,
   carrier_bag = new.carrier_bag,
   demo_note = new.demo_note;

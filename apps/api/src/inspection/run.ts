@@ -39,8 +39,11 @@ import {
   type Expected,
   judge,
   type Judgement,
+  type Measurements,
+  NO_MEASUREMENTS,
   referenceItems,
 } from '../judge/judge';
+import {measureNoshiSize} from '../measure/noshi-size';
 import type {Notifier} from '../lib/notifier';
 import {inspectImage, saveImage, sha256} from '../storage/images';
 
@@ -126,6 +129,7 @@ export async function runInspection(
       noshiType: order.noshiType,
       noshiRequired: order.noshiRequired,
       cardRequired: order.cardRequired,
+      noshiSize: order.noshiSize,
       bagType: order.bagType,
       carrierBag: order.carrierBag,
     };
@@ -183,11 +187,19 @@ export async function runInspection(
       {deadline, signal: controller.signal, deps: deps.guardDeps}
     );
     attempts = read.attempts;
-    const judgement = judge(expected, read, {
-      refMismatchBlocksOk: deps.config.REF_MISMATCH_BLOCKS_OK,
-    });
+    // のし紙の大きさの登録があるオーダーだけ計測する（参考判定の対象外なら計測しない）
+    const measurements =
+      expected.noshiRequired && expected.noshiSize !== null
+        ? measure(input.image, image.mime, inspectionId, deps.logger)
+        : NO_MEASUREMENTS;
+    const judgement = judge(
+      expected,
+      read,
+      {refMismatchBlocksOk: deps.config.REF_MISMATCH_BLOCKS_OK},
+      measurements
+    );
     const readData = read.status === 'ok' ? read.data : null;
-    const result = toResult(inspectionId, target, judgement, readData, expected);
+    const result = toResult(inspectionId, target, judgement, readData, expected, measurements);
     const adopted = attempts[attempts.length - 1];
 
     // --- 5. 確定
@@ -202,6 +214,7 @@ export async function runInspection(
           cardPresent: readData?.card_present ?? null,
           noshiType: readData?.mizuhiki_type ?? null,
         },
+        measurements,
         tokensIn: sum(attempts.map(a => a.tokensIn)),
         tokensOut: sum(attempts.map(a => a.tokensOut)),
         durationMs: now() - startedAt,
@@ -251,6 +264,27 @@ export async function runInspection(
     throw appErr;
   } finally {
     clearTimeout(timer);
+  }
+}
+
+/**
+ * 参考判定のための計測（のし紙の縦横比。#55）。失敗しても検品は止めず、ログに残して「判定できず」にする
+ * （主判定に影響しない参考判定のため）
+ */
+function measure(
+  image: Buffer,
+  mime: string,
+  inspectionId: string,
+  logger: FastifyBaseLogger
+): Measurements {
+  try {
+    return {noshiSize: measureNoshiSize(image, mime)};
+  } catch (err: unknown) {
+    logger.warn(
+      {inspectionId, errorCode: 'SYS_UNEXPECTED', err: errorMessage(err)},
+      'のし紙の縦横比を計測できませんでした（参考判定は「判定できず」になります）'
+    );
+    return {noshiSize: {size: null, ratio: null, reason: 'ERROR'}};
   }
 }
 
@@ -304,7 +338,8 @@ function toResult(
   target: ReplayTarget,
   j: Judgement,
   read: AiReadResult | null,
-  expected: Expected
+  expected: Expected,
+  measurements: Measurements
 ): Omit<InspectionResult, 'replayed' | 'completedAt'> | null {
   if (j.overall === 'ERROR' || j.items === null) return null;
   const items: InspectionItem[] = j.items.map(i => ({
@@ -325,7 +360,7 @@ function toResult(
     unreadableReason: j.unreadableReason,
     items,
     refWarnings: j.refWarnings,
-    references: referenceItems(expected, read),
+    references: referenceItems(expected, read, measurements),
   };
 }
 
@@ -346,6 +381,7 @@ function sameTarget(stored: StoredInspection, target: ReplayTarget): boolean {
     a.noshiType === b.noshiType &&
     a.noshiRequired === b.noshiRequired &&
     a.cardRequired === b.cardRequired &&
+    a.noshiSize === b.noshiSize &&
     a.bagType === b.bagType &&
     a.carrierBag === b.carrierBag
   );

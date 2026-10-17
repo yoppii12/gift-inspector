@@ -54,6 +54,9 @@ export const REF_WARNINGS = [
   'MANUAL_MISSING',
   'CARRIER_BAG_MISSING',
   'CARRIER_BAG_UNEXPECTED',
+  // #55: のし紙の長短（縦横比の計測。オーダーで指定があるときだけ）
+  'NOSHI_SIZE_MISMATCH',
+  'NOSHI_SIZE_UNKNOWN',
 ] as const;
 export type RefWarning = (typeof REF_WARNINGS)[number];
 
@@ -68,9 +71,14 @@ export type MizuhikiType = (typeof MIZUHIKI_TYPES)[number];
 export const BAG_TYPES = ['紙平袋', '布巾着袋', 'なし'] as const;
 export type BagType = (typeof BAG_TYPES)[number];
 
+/** のし紙の大きさ（#55）。高さは共通で長さが違う。縦横比で見分ける */
+export const NOSHI_SIZES = ['長い', '短い'] as const;
+export type NoshiSize = (typeof NOSHI_SIZES)[number];
+
 /** 参考判定の項目（判定結果の一覧の順） */
 export const REFERENCE_KEYS = [
   'noshi',
+  'noshi_size',
   'mizuhiki',
   'card',
   'bag',
@@ -82,6 +90,7 @@ export type ReferenceKey = (typeof REFERENCE_KEYS)[number];
 
 export const REFERENCE_LABELS: Record<ReferenceKey, string> = {
   noshi: 'のし',
+  noshi_size: 'のし紙の大きさ',
   mizuhiki: '水引',
   card: 'メッセージカード',
   bag: 'ラッピングの袋',

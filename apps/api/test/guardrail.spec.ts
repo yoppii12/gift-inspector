@@ -32,6 +32,7 @@ const EXPECTED: Expected = {
   noshiType: '花結び',
   noshiRequired: true,
   cardRequired: true,
+  noshiSize: null,
   bagType: null,
   carrierBag: null,
 };
@@ -316,6 +317,50 @@ describe('ラッピング資材・手提げ袋の参考判定（#53）', () => {
     const expected: Expected = {...EXPECTED, bagType: '紙平袋', carrierBag: true};
     expect(judge(expected, ok(READ), OFF)).toMatchObject({overall: 'OK'});
     expect(judge(expected, ok(READ), ON)).toMatchObject({overall: 'NG', ngReason: 'REF_MISMATCH'});
+  });
+});
+
+describe('のし紙の長短の参考判定（#55）', () => {
+  const LONG: Expected = {...EXPECTED, noshiSize: '長い'};
+  const measured = (size: '長い' | '短い' | null, reason = 'MEASURED') => ({
+    noshiSize: {size, ratio: size === '長い' ? 3.55 : size === '短い' ? 2.95 : null, reason},
+  });
+
+  it.each([
+    ['一致', measured('長い'), [], 'MATCH'],
+    ['不一致', measured('短い'), ['NOSHI_SIZE_MISMATCH'], 'MISMATCH'],
+    ['判定できず', measured(null, 'MULTIPLE'), ['NOSHI_SIZE_UNKNOWN'], 'UNKNOWN'],
+    ['計測なし', {noshiSize: null}, ['NOSHI_SIZE_UNKNOWN'], 'UNKNOWN'],
+  ] as const)('%s', (_l, m, warnings, status) => {
+    expect(refWarnings(LONG, READ, m)).toEqual(warnings);
+    expect(referenceItems(LONG, READ, m).find(r => r.key === 'noshi_size')?.status).toBe(status);
+  });
+
+  it('のし紙が写っていなければ大きさの警告は出さない（のしがない警告が出る）', () => {
+    expect(refWarnings(LONG, {...READ, noshi_present: false}, measured(null, 'NOT_FOUND'))).toEqual(
+      ['NOSHI_MISSING']
+    );
+  });
+
+  it('登録がなければ（null）一覧にも警告にも出さない', () => {
+    expect(refWarnings(EXPECTED, READ, measured('短い'))).toEqual([]);
+    expect(referenceItems(EXPECTED, READ, measured('短い')).map(r => r.key)).not.toContain(
+      'noshi_size'
+    );
+  });
+
+  it('縦横比と判定できなかった理由を補足に出す', () => {
+    const refs = referenceItems(LONG, READ, measured(null, 'BORDERLINE'));
+    expect(refs.find(r => r.key === 'noshi_size')?.detail).toBe('長い・短いの境目に近い');
+    const ok = referenceItems(LONG, READ, measured('長い'));
+    expect(ok.find(r => r.key === 'noshi_size')?.detail).toBe('縦横比 3.55');
+  });
+
+  it('大きさの警告は主判定を変えない（既定）', () => {
+    expect(judge(LONG, ok(READ), OFF, measured('短い'))).toMatchObject({
+      overall: 'OK',
+      refWarnings: ['NOSHI_SIZE_MISMATCH'],
+    });
   });
 });
 
