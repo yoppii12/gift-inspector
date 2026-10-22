@@ -191,6 +191,30 @@
       },
       "expected": "OK",
       "note": "表書き「無地」（印字なしが正解）。名入れなし"
+    },
+    {
+      "orderCode": "GIFT-DEMO-010",
+      "kind": "real",
+      "setup": "長いのし紙（結び切り・内祝）、カード、布巾着袋（袋から出す）、取扱説明書、紙手提げ袋",
+      "registered": {
+        "omotegaki": "内祝",
+        "atena": null,
+        "cardText": "HAPPY BIRTHDAY! おめでとうございます。",
+        "noshiType": "結び切り",
+        "noshiSize": "長い",
+        "noshiRequired": true,
+        "cardRequired": true,
+        "bagType": "布巾着袋",
+        "carrierBag": true
+      },
+      "printed": {
+        "omotegaki": "内祝",
+        "atena": null,
+        "cardText": "HAPPY BIRTHDAY! おめでとうございます。",
+        "noshiType": "結び切り"
+      },
+      "expected": "OK",
+      "note": "実物: 長いのし（結び切り）＋カード＋布巾着袋・取扱説明書＋紙手提げ袋。参考判定もすべて一致"
     }
   ]
 }
