@@ -15,7 +15,7 @@ import {SEED_SQL_RELATIVE_PATH, renderSeedSql} from '../src/seed-sql';
 const orders = loadDemoOrders();
 
 describe('デモ用オーダーの元データ', () => {
-  it('擬似のし5件・実物4件があり、OK と意図的な NG の両方を含む', () => {
+  it('擬似のし5件と実物のオーダーがあり、OK と意図的な NG の両方を含む', () => {
     expect(orders.filter(o => o.kind === 'pseudo')).toHaveLength(5);
     expect(orders.filter(o => o.kind === 'real').length).toBeGreaterThan(0);
     expect(orders.filter(o => o.expected === 'OK').length).toBeGreaterThan(0);
